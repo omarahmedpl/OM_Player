@@ -1,0 +1,2119 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>OM Player Mobile</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ccircle cx=%2750%27 cy=%2750%27 r=%2734%27 fill=%27none%27 stroke=%27%23E11D48%27 stroke-width=%2718%27 stroke-linecap=%27round%27 stroke-dasharray=%27160 214%27 transform=%27rotate(-90 50 50)%27/%3E%3Ccircle cx=%2716%27 cy=%2750%27 r=%2713%27 fill=%27%23F4F4F6%27/%3E%3C/svg%3E">
+<style>
+/* ---------- Base ---------- */
+[hidden] { display: none !important; }
+html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+body { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+h1, h2, h3, p { margin: 0; }
+ul { list-style: none; margin: 0; padding: 0; }
+input { font: inherit; color: inherit; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+svg.i { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+svg.i-sm { width: 18px; height: 18px; }
+svg.i-lg { width: 32px; height: 32px; }
+.instant, .instant * { transition: none !important; animation: none !important; }
+.sheet:focus, .player:focus { outline: none; }
+.mono { font-family: var(--font-mono); }
+
+/* ---------- App shell ---------- */
+#app { position: fixed; inset: 0; display: flex; flex-direction: column; background: var(--bg); }
+#screens { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.screen { position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; background: var(--bg); padding-bottom: var(--s-6); overscroll-behavior: contain; }
+.screen[hidden] { display: none; }
+.screen.push { position: fixed; z-index: 20; padding-bottom: calc(var(--s-6) + env(safe-area-inset-bottom)); box-shadow: var(--shadow-3); }
+
+.appbar { position: sticky; top: 0; z-index: 4; display: flex; align-items: center; gap: var(--s-1);
+  min-height: calc(60px + env(safe-area-inset-top));
+  padding: calc(env(safe-area-inset-top) + var(--s-2)) max(var(--s-2), env(safe-area-inset-right)) var(--s-2) max(var(--s-4), env(safe-area-inset-left));
+  background: var(--bg); border-bottom: 1px solid transparent; transition: border-color var(--dur-fast) ease; }
+.appbar.scrolled { border-bottom-color: var(--hairline); }
+.appbar.with-back { padding-left: max(var(--s-1), env(safe-area-inset-left)); }
+.appbar h1 { font-size: var(--fs-lg); font-weight: 600; letter-spacing: -0.01em; }
+.bar-title { flex: 1; min-width: 0; }
+.bar-title h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar-title p { font-size: var(--fs-xs); color: var(--text-3); }
+.wordmark { display: flex; align-items: center; gap: var(--s-2); margin-right: auto; font-size: var(--fs-lg); font-weight: 700; letter-spacing: -0.02em; }
+.wordmark b { font-weight: 800; }
+.wordmark span { color: var(--text-2); font-weight: 500; }
+.wordmark .om-mark { width: 30px; height: 30px; }
+
+.icon-btn { width: var(--tap); height: var(--tap); flex: none; display: grid; place-items: center; border-radius: var(--r-full); color: var(--text-2); }
+.icon-btn[aria-expanded="true"], .icon-btn.on { color: var(--text); background: var(--surface-2); }
+
+.search-field { flex: 1; display: flex; align-items: center; gap: var(--s-1); min-width: 0; }
+.search-field input { flex: 1; min-width: 0; height: var(--tap); border: 0; background: var(--surface-2); border-radius: var(--r-full); padding: 0 var(--s-4); outline: none; }
+.search-field input:focus-visible { box-shadow: 0 0 0 2px var(--ring); }
+.search-field input::placeholder { color: var(--text-3); }
+
+.sec-h { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-2); padding: var(--s-5) var(--s-4) var(--s-3); }
+.sec-h h2 { font-size: var(--fs-md); font-weight: 600; }
+.sec-h .meta { font-size: var(--fs-xs); }
+.meta { font-size: var(--fs-xs); color: var(--text-3); }
+.lede { padding: 0 var(--s-4); color: var(--text-2); font-size: var(--fs-sm); }
+
+/* Stagger entrance (40ms) */
+.stagger > * { animation: rise var(--dur-base) var(--ease-out) both; animation-delay: calc(min(var(--i, 0), 12) * 40ms); }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+
+/* ---------- Thumbnails ---------- */
+.thumb { position: relative; display: block; aspect-ratio: 16 / 9; border-radius: var(--r-md); overflow: hidden; background: var(--surface-2); }
+.thumb .art { position: absolute; inset: 0; }
+.chip-dur { position: absolute; right: 6px; bottom: 8px; padding: 2px 6px; border-radius: 6px; background: var(--scrim); color: var(--on-video); font: 500 var(--fs-xs)/1.4 var(--font-mono); }
+.prog { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--scrim); }
+.prog i { display: block; height: 100%; background: var(--primary); transform-origin: left; }
+
+/* Continue watching */
+.cw-row { display: flex; gap: var(--s-3); overflow-x: auto; padding: 0 var(--s-4) var(--s-1); scroll-snap-type: x mandatory; scroll-padding: 0 var(--s-4); scrollbar-width: none; }
+.cw-row::-webkit-scrollbar { display: none; }
+.cw-row > li { flex: 0 0 min(62vw, 250px); scroll-snap-align: start; }
+.cw-card { display: flex; flex-direction: column; gap: var(--s-2); width: 100%; text-align: left; border-radius: var(--r-md); }
+.cw-card .t { font-size: var(--fs-sm); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.cw-card .meta { display: block; margin-top: -6px; }
+
+/* Folders */
+.folders.list .folder { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 68px; padding: var(--s-2) var(--s-4); text-align: left; }
+.folders.list .mosaic { display: none; }
+.folders.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); padding: 0 var(--s-4); }
+.folders.grid .folder { display: flex; flex-direction: column; align-items: stretch; gap: var(--s-2); width: 100%; padding: var(--s-2); text-align: left; background: var(--surface-1); border: 1px solid var(--hairline); border-radius: var(--r-lg); }
+.folders.grid .ftile, .folders.grid .chev { display: none; }
+.mosaic { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; aspect-ratio: 16 / 10; border-radius: var(--r-md); overflow: hidden; background: var(--surface-2); }
+.mosaic span { display: block; }
+.mosaic .fi { position: absolute; left: 6px; bottom: 6px; width: 30px; height: 30px; border-radius: var(--r-sm); background: var(--scrim); color: var(--on-video); display: grid; place-items: center; }
+.mosaic .fi svg { width: 16px; height: 16px; }
+.folders.grid .ftext { padding: 0 var(--s-1) var(--s-1); }
+.ftile { width: var(--tap); height: var(--tap); flex: none; display: grid; place-items: center; border-radius: var(--r-md); background: var(--primary-soft); color: var(--primary-hover); }
+.ftext { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.fname { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chev { color: var(--text-3); }
+
+/* Video items */
+.vlist.list .vitem { display: flex; align-items: center; gap: var(--s-1); padding: 0 var(--s-1) 0 var(--s-4); }
+.vlist.list .vmain { flex: 1; min-width: 0; display: grid; grid-template-columns: min(38vw, 148px) minmax(0, 1fr); gap: var(--s-3); align-items: center; padding: var(--s-2) var(--s-1) var(--s-2) 0; text-align: left; border-radius: var(--r-md); }
+.vlist.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-4) var(--s-3); padding: var(--s-1) var(--s-4); }
+.vlist.grid .vitem { position: relative; }
+.vlist.grid .vmain { display: flex; flex-direction: column; gap: var(--s-2); width: 100%; text-align: left; border-radius: var(--r-md); }
+.vlist.grid .vtext { padding-right: 36px; }
+.vlist.grid .vmore { position: absolute; right: -8px; bottom: -6px; }
+.vtext { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.vtitle { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: var(--fs-sm); font-weight: 500; line-height: 1.35; }
+.newdot { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: var(--r-full); background: var(--primary); vertical-align: 1px; }
+.newtag { color: var(--primary-hover); font-weight: 700; letter-spacing: .04em; }
+.empty { padding: var(--s-12) var(--s-6); text-align: center; color: var(--text-3); display: grid; justify-items: center; gap: var(--s-3); }
+.empty svg { width: 40px; height: 40px; color: var(--text-3); }
+
+/* ---------- Bottom nav ---------- */
+.nav { flex: none; display: grid; grid-template-columns: repeat(4, 1fr); background: var(--surface-1); border-top: 1px solid var(--hairline); padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+.nav button { min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: var(--fs-xs); font-weight: 500; color: var(--text-3); }
+.nav .pill { position: relative; width: 56px; height: 30px; display: grid; place-items: center; border-radius: var(--r-full); }
+.nav .pill::before { content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--primary-soft); opacity: 0; transform: scaleX(.5); transition: transform var(--dur-base) var(--ease-out), opacity var(--dur-fast) ease; }
+.nav .pill svg { position: relative; }
+.nav button[aria-current="page"] { color: var(--text); }
+.nav button[aria-current="page"] .pill { color: var(--primary-hover); }
+.nav button[aria-current="page"] .pill::before { opacity: 1; transform: none; }
+.nav .pressable:hover { background: none; }
+
+/* ---------- Buttons / controls ---------- */
+.btn { min-height: var(--tap); padding: 0 var(--s-5); border-radius: var(--r-md); display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2); font-weight: 600; }
+.btn-primary { background: var(--primary); color: var(--on-primary); }
+.btn-primary.pressable:hover { background: var(--primary-hover); }
+.btn-ghost { background: var(--surface-2); color: var(--text); }
+.btn-block { width: 100%; }
+.chips { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+.chips.scroll { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 calc(var(--s-4) * -1); padding: 0 var(--s-4); }
+.chip { min-height: var(--tap); padding: 0 var(--s-4); border-radius: var(--r-full); background: var(--surface-2); color: var(--text-2); font-size: var(--fs-sm); font-weight: 500; white-space: nowrap; border: 1px solid var(--hairline); }
+.chip[aria-checked="true"], .chip[aria-pressed="true"] { background: var(--primary-soft); color: var(--text); border-color: var(--primary); }
+
+.seg { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 3px; border-radius: var(--r-md); background: var(--surface-2); }
+.seg::before { content: ''; position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / var(--n, 3)); border-radius: calc(var(--r-md) - 3px); background: var(--surface-3); box-shadow: var(--shadow-1); transform: translateX(calc(100% * var(--idx, 0))); transition: transform var(--dur-base) var(--ease-out); }
+:root[data-theme="light"] .seg::before { background: var(--surface-1); }
+.seg button { position: relative; min-height: var(--tap); border-radius: calc(var(--r-md) - 3px); font-size: var(--fs-sm); font-weight: 500; color: var(--text-2); }
+.seg button[aria-checked="true"] { color: var(--text); font-weight: 600; }
+.seg .pressable:hover { background: none; }
+
+.tr { position: relative; flex: none; width: 40px; height: 24px; border-radius: var(--r-full); background: var(--surface-3); transition: background-color var(--dur-fast) ease; }
+.tr::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: var(--r-full); background: var(--text-2); transition: transform var(--dur-base) var(--ease-out); }
+[aria-checked="true"] > .tr { background: var(--primary); }
+[aria-checked="true"] > .tr::after { transform: translateX(16px); background: var(--on-primary); }
+
+/* ---------- Settings / rows ---------- */
+.group-h { padding: var(--s-6) var(--s-5) var(--s-2); font-size: var(--fs-xs); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
+.group { margin: 0 var(--s-4); background: var(--surface-1); border: 1px solid var(--hairline); border-radius: var(--r-lg); overflow: hidden; }
+.row { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 60px; padding: var(--s-2) var(--s-4); text-align: left; }
+.group > * + * { border-top: 1px solid var(--hairline); }
+.row .lbl { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.row .sub { font-size: var(--fs-xs); color: var(--text-3); }
+.row .val { color: var(--text-2); font-size: var(--fs-sm); }
+.row > svg:first-child { color: var(--text-2); }
+.row.stack { flex-direction: column; align-items: stretch; gap: var(--s-3); padding: var(--s-3) var(--s-4) var(--s-4); }
+.row.stack .lbl { flex-direction: row; align-items: center; gap: var(--s-3); }
+.row.stack .lbl > div { display: flex; flex-direction: column; }
+.group .pressable:hover { background-color: var(--surface-2); }
+
+/* ---------- Network ---------- */
+.card { margin: 0 var(--s-4); padding: var(--s-4); background: var(--surface-1); border: 1px solid var(--hairline); border-radius: var(--r-lg); display: grid; gap: var(--s-3); }
+.field label { display: block; margin-bottom: var(--s-2); font-size: var(--fs-sm); font-weight: 500; color: var(--text-2); }
+.input-wrap { position: relative; display: flex; align-items: center; }
+.input-wrap > svg { position: absolute; left: var(--s-3); color: var(--text-3); pointer-events: none; }
+.input { width: 100%; min-height: 52px; padding: 0 var(--s-3) 0 var(--s-10); background: var(--surface-2); border: 1px solid var(--hairline-strong); border-radius: var(--r-md); color: var(--text); outline: none; }
+.input.plain { padding-left: var(--s-4); }
+.input:focus-visible { border-color: var(--ring); box-shadow: 0 0 0 3px var(--primary-soft); }
+.input::placeholder { color: var(--text-3); }
+.input[aria-invalid="true"] { border-color: var(--danger); }
+.help { margin-top: 6px; font-size: var(--fs-xs); color: var(--text-3); }
+.help.err { color: var(--danger); }
+:root[data-theme="light"] .help.err { color: var(--primary-hover); }
+.btn-row { display: flex; gap: var(--s-2); }
+.btn-row .btn { flex: 1; }
+.hist .url { display: block; font: 500 var(--fs-sm)/1.4 var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hist li { display: flex; align-items: center; padding-right: var(--s-1); }
+.hist .row { flex: 1; min-width: 0; }
+.linkbtn { min-height: var(--tap); padding: 0 var(--s-2); color: var(--primary-hover); font-size: var(--fs-sm); font-weight: 600; border-radius: var(--r-sm); }
+
+/* ---------- Menu ---------- */
+.menu-bd { position: fixed; inset: 0; z-index: 79; }
+.menu { position: fixed; z-index: 80; min-width: 224px; max-width: calc(100vw - 16px); padding: var(--s-1); background: var(--surface-2); border: 1px solid var(--hairline-strong); border-radius: var(--r-md); box-shadow: var(--shadow-3);
+  opacity: 0; transform: scale(.95); transition: opacity 120ms ease, transform 120ms var(--ease-out); }
+.menu.open { opacity: 1; transform: none; transition-duration: var(--dur-fast); }
+.menu[hidden] { display: none; }
+.mitem { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: var(--tap); padding: 0 var(--s-3); border-radius: var(--r-sm); text-align: left; font-size: var(--fs-sm); }
+.mitem > svg:first-child { color: var(--text-2); width: 20px; height: 20px; }
+.mitem span { flex: 1; }
+.mitem.danger, .mitem.danger > svg:first-child { color: var(--danger); }
+:root[data-theme="light"] .mitem.danger, :root[data-theme="light"] .mitem.danger > svg:first-child { color: var(--primary-hover); }
+.mitem .mcheck { color: var(--primary-hover); }
+.msep { height: 1px; margin: var(--s-1) var(--s-2); background: var(--hairline); }
+.mlabel { padding: var(--s-2) var(--s-3) var(--s-1); font-size: var(--fs-xs); font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; }
+
+/* ---------- Toast ---------- */
+.toast { position: fixed; z-index: 95; left: 50%; bottom: calc(80px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: var(--s-3); max-width: min(420px, calc(100vw - 32px)); min-height: 48px; padding: var(--s-1) var(--s-2) var(--s-1) var(--s-4);
+  background: var(--surface-3); color: var(--text); border-radius: var(--r-md); box-shadow: var(--shadow-2); font-size: var(--fs-sm);
+  opacity: 0; transform: translate(-50%, 16px); pointer-events: none; transition: opacity 160ms ease, transform 160ms var(--ease-out); }
+.toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; transition-duration: var(--dur-base); }
+.toast .msg { flex: 1; padding: var(--s-2) 0; }
+.toast .linkbtn:empty { display: none; }
+
+/* ---------- Sheets ---------- */
+.sheet-layer { position: absolute; inset: 0; z-index: 60; visibility: hidden; pointer-events: none; }
+#app-sheets { position: fixed; z-index: 70; }
+.sheet-layer.active { visibility: visible; pointer-events: auto; }
+.scrim { position: absolute; inset: 0; background: var(--scrim); opacity: 0; transition: opacity 200ms ease; }
+.scrim.on { opacity: 1; transition-duration: var(--dur-sheet); }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; margin: 0 auto; width: 100%; max-width: 560px; max-height: 88%; display: flex; flex-direction: column;
+  background: var(--surface-1); color: var(--text); border-radius: var(--r-xl) var(--r-xl) 0 0; box-shadow: var(--shadow-3); padding-bottom: env(safe-area-inset-bottom);
+  transform: translateY(105%); visibility: hidden; transition: transform 240ms var(--ease-drawer), visibility 0s linear 240ms; }
+.sheet.open { transform: translateY(0); visibility: visible; transition: transform var(--dur-sheet) var(--ease-drawer), visibility 0s; }
+.sheet.dragging { transition: none; }
+.sheet-grab { flex: none; padding: var(--s-2) var(--s-2) var(--s-1) var(--s-5); touch-action: none; cursor: grab; user-select: none; }
+.sheet.dragging .sheet-grab { cursor: grabbing; }
+.handle { width: 36px; height: 4px; margin: 0 auto var(--s-1); border-radius: var(--r-full); background: var(--hairline-strong); }
+.sheet-head { display: flex; align-items: center; gap: var(--s-2); }
+.sheet-head h3 { flex: 1; font-size: var(--fs-md); font-weight: 600; }
+.sheet-body { overflow-y: auto; overscroll-behavior: contain; padding: 0 var(--s-4) var(--s-5); }
+.sheet-sec { padding-top: var(--s-4); }
+.sheet-sec > h4 { margin: 0 0 var(--s-2); font-size: var(--fs-xs); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
+.opts { display: grid; gap: 2px; }
+.opt { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 56px; padding: var(--s-2) var(--s-3); border-radius: var(--r-md); text-align: left; }
+.opt .lbl { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.opt .sub { font-size: var(--fs-xs); color: var(--text-3); }
+.opt .ck { color: var(--primary-hover); opacity: 0; transform: scale(.8); transition: opacity var(--dur-fast) ease, transform var(--dur-fast) var(--ease-out); }
+.opt[aria-checked="true"] { background: var(--primary-soft); }
+.opt[aria-checked="true"] .ck { opacity: 1; transform: none; }
+.stepper { display: flex; align-items: center; gap: var(--s-2); }
+.stepper .v { flex: 1; text-align: center; font: 600 var(--fs-md)/1 var(--font); font-variant-numeric: tabular-nums; }
+.swatches { display: flex; gap: var(--s-2); }
+.sw { width: var(--tap); height: var(--tap); border-radius: var(--r-full); display: grid; place-items: center; border: 2px solid transparent; }
+.sw span { width: 28px; height: 28px; border-radius: var(--r-full); box-shadow: inset 0 0 0 1px var(--hairline-strong); }
+.sw[aria-checked="true"] { border-color: var(--primary); }
+.sub-preview { position: relative; display: grid; place-items: end center; height: 96px; padding-bottom: var(--s-3); border-radius: var(--r-md); overflow: hidden;
+  background: linear-gradient(160deg, hsl(220 50% 30%), hsl(260 40% 14%)); }
+.found { margin-top: var(--s-2); }
+.spin { animation: spin 700ms linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.speed-read { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); padding: var(--s-2) 0 var(--s-3); }
+.speed-read output { font: 700 var(--fs-2xl)/1 var(--font); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+input[type="range"] { accent-color: var(--primary); }
+.range-full { width: 100%; height: var(--tap); margin: 0; }
+.range-ends { display: flex; justify-content: space-between; font-size: var(--fs-xs); color: var(--text-3); margin-top: -6px; }
+.hint { margin-top: var(--s-3); font-size: var(--fs-xs); color: var(--text-3); }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2); }
+.tile { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); min-height: 92px; padding: var(--s-3); border-radius: var(--r-lg); background: var(--surface-2); border: 1px solid var(--hairline); text-align: left; }
+.tile > svg { color: var(--text-2); }
+.tile .lbl { display: flex; flex-direction: column; width: 100%; }
+.tile .lbl b { font-weight: 600; font-size: var(--fs-sm); }
+.tile .lbl small { font-size: var(--fs-xs); color: var(--text-3); }
+.tile[aria-checked="true"], .tile.on { border-color: var(--primary); background: var(--primary-soft); }
+.tile[aria-checked="true"] > svg, .tile.on > svg { color: var(--primary-hover); }
+.tile .top { display: flex; justify-content: space-between; width: 100%; align-items: center; }
+.tile .top svg { color: var(--text-2); }
+.tile.on .top > svg:first-child { color: var(--primary-hover); }
+.eq-wrap { position: relative; margin-top: var(--s-3); padding: var(--s-2) 0; border-radius: var(--r-lg); background: var(--surface-2); }
+.eq-wrap.off { opacity: .5; }
+.eq-curve { position: absolute; inset: var(--s-8) var(--s-2) var(--s-10); width: calc(100% - var(--s-4)); height: calc(100% - var(--s-8) - var(--s-10)); pointer-events: none; }
+.eq-curve path { fill: none; stroke: var(--primary); stroke-width: 2; stroke-linecap: round; opacity: .55; }
+.eq-curve line { stroke: var(--hairline-strong); stroke-dasharray: 3 4; }
+.bands { position: relative; display: grid; grid-template-columns: repeat(5, 1fr); }
+.band { display: flex; flex-direction: column; align-items: center; gap: var(--s-1); font-size: var(--fs-xs); color: var(--text-3); }
+.band b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.band input { writing-mode: vertical-lr; direction: rtl; width: var(--tap); height: 132px; margin: 0; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: var(--s-2) var(--s-4); font-size: var(--fs-sm); padding-top: var(--s-3); }
+.kv dt { color: var(--text-3); }
+.kv dd { margin: 0; text-align: right; word-break: break-word; }
+.pin-dots { display: flex; justify-content: center; gap: var(--s-4); padding: var(--s-4) 0 var(--s-2); }
+.pin-dots i { width: 14px; height: 14px; border-radius: var(--r-full); border: 2px solid var(--text-3); transition: transform var(--dur-fast) var(--ease-out); }
+.pin-dots i.f { background: var(--text); border-color: var(--text); transform: scale(1.1); }
+.pin-msg { text-align: center; font-size: var(--fs-sm); color: var(--text-2); min-height: 1.5em; }
+.keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-2); max-width: 300px; margin: var(--s-3) auto 0; }
+.keypad button { min-height: 60px; border-radius: var(--r-lg); background: var(--surface-2); font-size: var(--fs-lg); font-weight: 500; display: grid; place-items: center; }
+.keypad .blank { visibility: hidden; }
+@keyframes shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
+.shake { animation: shake 280ms var(--ease-out); }
+.keypad[aria-busy="true"] button { opacity: .6; }
+
+/* ---------- Player ---------- */
+.player { position: fixed; inset: 0; z-index: 50; background: var(--bg); color: var(--on-video); overflow: hidden; visibility: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+.player.open { visibility: visible; }
+/* The player (and its PiP window and its sheets) always stays dark via the shared .scheme-dark scope (tokens.css). */
+:root[data-theme="light"] .player .seg::before { background: var(--surface-3); }
+.stage { position: absolute; left: 50%; top: 50%; width: var(--sw, 100vw); height: var(--sh, 100vh); overflow: hidden; background: var(--bg); transform: translate(-50%, -50%) rotate(var(--rot, 0deg));
+  /* safe-area insets per stage edge (top/right/bottom/left) */
+  --si-t: env(safe-area-inset-top); --si-r: env(safe-area-inset-right); --si-b: env(safe-area-inset-bottom); --si-l: env(safe-area-inset-left); }
+/* Stage rotated 90deg clockwise: physical top -> stage left, right -> top, bottom -> right, left -> bottom */
+.stage.rot { --si-t: env(safe-area-inset-right); --si-r: env(safe-area-inset-bottom); --si-b: env(safe-area-inset-left); --si-l: env(safe-area-inset-top); }
+.stage .sheet { padding-bottom: var(--si-b); }
+.vwrap { position: absolute; inset: 0; display: grid; place-items: center; overflow: hidden; }
+#vcanvas { display: block; transition: transform var(--dur-base) var(--ease-out); }
+#vcanvas.live { transition: none; }
+.aart { position: absolute; inset: 0; display: none; place-content: center; justify-items: center; gap: var(--s-3); text-align: center; background: radial-gradient(circle at 50% 40%, hsl(340 45% 22%), hsl(260 30% 6%)); }
+.player.audio .aart { display: grid; }
+.disc { width: 132px; height: 132px; border-radius: var(--r-full); display: grid; place-items: center; background: var(--glass); box-shadow: var(--shadow-3); animation: spin 6s linear infinite; }
+.player:not(.playing) .disc { animation-play-state: paused; }
+.disc svg { width: 64px; height: 64px; }
+.aart p { font-weight: 600; font-size: var(--fs-md); max-width: 80vw; }
+.aart small { color: var(--on-video); opacity: .8; font-size: var(--fs-xs); }
+.dim, .flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; }
+.dim { background: var(--bg); }
+.flash { background: var(--on-video); }
+.gesture { position: absolute; inset: 0; touch-action: none; }
+.subline { position: absolute; left: 50%; bottom: 10%; max-width: 82%; transform: translateX(-50%); text-align: center; font-weight: 600; line-height: 1.3; pointer-events: none; transition: transform var(--dur-base) var(--ease-out); white-space: pre-line; }
+.subline:empty { display: none; }
+.stage.ui-on .subline { transform: translate(-50%, -84px); }
+.subline[data-size="S"] { font-size: var(--fs-base); }
+.subline[data-size="M"] { font-size: var(--fs-md); }
+.subline[data-size="L"] { font-size: var(--fs-lg); }
+.subline[data-size="XL"] { font-size: var(--fs-xl); }
+.subline[data-color="white"] { color: var(--on-video); }
+.subline[data-color="yellow"] { color: var(--warning); }
+.subline[data-color="cyan"] { color: var(--accent); }
+.subline[data-color="green"] { color: var(--success); }
+.subline[data-bg="shadow"] { text-shadow: 0 1px 3px var(--bg), 0 0 8px var(--bg); }
+.subline[data-bg="box"] { background: var(--scrim); padding: 2px 10px; border-radius: 6px; }
+.sub-preview .subline { position: static; transform: none; max-width: 92%; }
+
+.ripple { position: absolute; top: 0; bottom: 0; width: 38%; overflow: hidden; display: grid; place-items: center; pointer-events: none; opacity: 0; transition: opacity 200ms ease; background: var(--hairline); }
+.ripple.l { left: 0; border-radius: 0 50% 50% 0 / 0 50% 50% 0; }
+.ripple.r { right: 0; border-radius: 50% 0 0 50% / 50% 0 0 50%; }
+.ripple.show { opacity: 1; transition-duration: 80ms; }
+.ripple .rc { position: absolute; width: 220px; height: 220px; margin: -110px 0 0 -110px; border-radius: var(--r-full); background: var(--hairline-strong); opacity: 0; }
+.ripple .rl { position: relative; display: grid; justify-items: center; gap: 2px; font-weight: 600; font-size: var(--fs-sm); }
+
+.pill-ui { background: var(--glass); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border-radius: var(--r-full); box-shadow: var(--shadow-2); }
+.hud { position: absolute; top: 16%; left: 50%; display: flex; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-4); opacity: 0; transform: translate(-50%, -6px); transition: opacity 160ms ease, transform 160ms var(--ease-out); pointer-events: none; }
+.hud.show { opacity: 1; transform: translate(-50%, 0); transition-duration: var(--dur-fast); }
+.hud-bar { width: 112px; height: 4px; border-radius: var(--r-full); background: var(--hairline-strong); overflow: hidden; }
+.hud-bar i { display: block; height: 100%; background: var(--on-video); transform-origin: left; }
+.hud.seek .hud-bar { display: none; }
+.hud-txt { display: flex; align-items: baseline; gap: var(--s-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hud-txt b { font-size: var(--fs-md); font-weight: 700; }
+.hud-txt small { font-size: var(--fs-sm); opacity: .85; }
+.badge2x { position: absolute; top: var(--s-5); left: 50%; display: flex; align-items: center; gap: var(--s-2); padding: 6px var(--s-4); font-weight: 600; font-size: var(--fs-sm); opacity: 0; transform: translate(-50%, -8px); transition: opacity 140ms ease, transform 140ms var(--ease-out); pointer-events: none; }
+.badge2x.show { opacity: 1; transform: translate(-50%, 0); transition-duration: var(--dur-fast); }
+.vtoast { position: absolute; top: 50%; left: 50%; padding: var(--s-2) var(--s-5); font-weight: 600; font-size: var(--fs-md); max-width: 86%; text-align: center; border-radius: var(--r-lg); opacity: 0; transform: translate(-50%, -50%) scale(.96); transition: opacity 160ms ease, transform 160ms var(--ease-out); pointer-events: none; }
+.vtoast.show { opacity: 1; transform: translate(-50%, -50%); transition-duration: var(--dur-fast); }
+
+.controls { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 200ms ease; }
+.controls.show { opacity: 1; transition-duration: var(--dur-fast); }
+.controls.show button, .controls.show .seek { pointer-events: auto; }
+.controls .icon-btn { color: var(--on-video); }
+.controls .pressable:hover { background-color: var(--hairline-strong); }
+.ptop { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: var(--s-1); padding: max(var(--s-2), var(--si-t)) max(var(--s-3), var(--si-r)) var(--s-10) max(var(--s-3), var(--si-l)); background: linear-gradient(to bottom, var(--scrim), transparent); }
+.ptitle { flex: 1; min-width: 0; padding: 0 var(--s-1); text-shadow: var(--shadow-1); }
+.ptitle h2 { font-size: var(--fs-base); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ptitle p { font-size: var(--fs-xs); opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pcenter { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.bigplay { width: 72px; height: 72px; border-radius: var(--r-full); display: grid; place-items: center; color: var(--on-video); }
+.bigplay svg { width: 32px; height: 32px; fill: currentColor; }
+.pbottom { position: absolute; left: 0; right: 0; bottom: 0; padding: var(--s-12) max(var(--s-3), var(--si-r)) max(var(--s-2), var(--si-b)) max(var(--s-3), var(--si-l)); background: linear-gradient(to top, var(--scrim), transparent); }
+.seekrow { display: flex; align-items: center; gap: var(--s-3); padding: 0 var(--s-2); }
+.tc { font: 500 var(--fs-xs)/1 var(--font-mono); min-width: 4.2ch; text-shadow: var(--shadow-1); }
+.tc:last-child { text-align: right; }
+.seek { position: relative; flex: 1; height: var(--tap); display: flex; align-items: center; }
+.track { position: absolute; left: 0; right: 0; top: 50%; height: 4px; margin-top: -2px; border-radius: var(--r-full); background: var(--hairline-strong); overflow: hidden; }
+.buf, .played { position: absolute; inset: 0; transform-origin: left; }
+.buf { background: var(--hairline-strong); transform: scaleX(var(--b, 0)); }
+.played { background: var(--primary); transform: scaleX(var(--p, 0)); }
+.ticks i { position: absolute; top: 50%; width: 3px; height: 6px; margin: -3px 0 0 -1.5px; background: var(--scrim); }
+.ab-range { position: absolute; top: 50%; height: 8px; margin-top: -4px; border-radius: 2px; background: var(--primary-soft); box-shadow: inset 0 0 0 1px var(--primary); }
+.ab-mark { position: absolute; top: 2px; transform: translateX(-50%); font: 600 10px/1 var(--font); color: var(--on-video); }
+.knob-rail { position: absolute; inset: 0; pointer-events: none; transform: translateX(calc(var(--p, 0) * 100%)); }
+.knob { position: absolute; left: 0; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: var(--r-full); background: var(--primary); box-shadow: var(--shadow-1); transition: transform var(--dur-fast) var(--ease-out); }
+.seek.drag .knob { transform: scale(1.3); }
+.seek input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.seek:has(input:focus-visible) .track { outline: 2px solid var(--ring); outline-offset: 4px; }
+.prev-rail { position: absolute; left: 0; right: 0; bottom: calc(100% + 4px); height: 0; pointer-events: none; transform: translateX(calc(var(--pv, 0) * 100%)); }
+.preview { position: absolute; bottom: 0; left: -80px; width: 160px; display: grid; justify-items: center; gap: 4px; opacity: 0; transform: translateY(6px) scale(.96); transform-origin: bottom center; transition: opacity 140ms ease, transform 140ms var(--ease-out); }
+.preview.show { opacity: 1; transform: none; transition-duration: var(--dur-fast); }
+.preview canvas { width: 160px; height: 90px; border-radius: var(--r-sm); box-shadow: var(--shadow-2); outline: 2px solid var(--on-video); }
+.preview span { font: 600 var(--fs-xs)/1 var(--font-mono); padding: 4px 8px; }
+.brow { display: flex; align-items: center; gap: 2px; }
+.brow .sp { flex: 1; }
+.speed-btn { width: auto !important; min-width: var(--tap); padding: 0 var(--s-2); font-size: var(--fs-sm); font-weight: 700; font-variant-numeric: tabular-nums; border-radius: var(--r-full) !important; }
+.speed-btn.on { color: var(--warning) !important; }
+.unlock { position: absolute; top: 50%; left: max(var(--s-6), var(--si-l)); width: 56px; height: 56px; margin-top: -28px; display: grid; place-items: center; color: var(--on-video); opacity: 0; pointer-events: none; transform: scale(.95); transition: opacity 160ms ease, transform 160ms var(--ease-out); }
+.unlock.show { opacity: 1; transform: none; pointer-events: auto; }
+.stage.locked .controls { display: none; }
+
+/* PiP */
+.pip-ui { display: none; position: absolute; top: 0; right: 0; z-index: 3; }
+.pip-ui .icon-btn { color: var(--on-video); }
+.player.pip { inset: auto; right: var(--s-3); bottom: calc(80px + env(safe-area-inset-bottom)); width: 208px; height: 117px; border-radius: var(--r-md); box-shadow: var(--shadow-3); }
+.player.pip .pip-ui { display: flex; }
+.player.pip .controls, .player.pip .subline, .player.pip .sheet-layer, .player.pip .hud { display: none; }
+.player.pip .aart .disc { width: 56px; height: 56px; }
+.player.pip .aart .disc svg { width: 28px; height: 28px; }
+.player.pip .aart p, .player.pip .aart small { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .stagger > * { animation: none; }
+  .disc { animation: none; }
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <main id="screens">
+    <!-- Library -->
+    <section class="screen" id="scr-videos" aria-label="Videos">
+      <header class="appbar" id="lib-bar">
+        <div class="wordmark" id="wm"><svg class="om-mark" viewBox="0 0 100 100" aria-hidden="true"><circle class="trk" cx="50" cy="50" r="34"/><circle class="arc" cx="50" cy="50" r="34" transform="rotate(-90 50 50)"/><circle class="dot" cx="16" cy="50" r="9"/></svg><h1><b>OM</b> <span>Player</span></h1></div>
+        <div class="search-field" id="search-field" hidden>
+          <button class="icon-btn pressable" id="search-close" aria-label="Close search"><i data-icon="arrow-left"></i></button>
+          <input id="search-input" type="search" placeholder="Search videos" aria-label="Search videos" autocomplete="off" enterkeyhint="search">
+        </div>
+        <button class="icon-btn pressable" id="search-btn" aria-label="Search"><i data-icon="search"></i></button>
+        <button class="icon-btn pressable" id="sort-btn" aria-label="Sort" aria-haspopup="menu" aria-expanded="false"><i data-icon="sort"></i></button>
+        <button class="icon-btn pressable view-toggle" aria-label="Switch to grid view"><i data-icon="grid"></i></button>
+      </header>
+      <div id="lib-home">
+        <section id="cw-sec" aria-labelledby="cw-h">
+          <div class="sec-h"><h2 id="cw-h">Continue watching</h2><span class="meta" id="cw-count"></span></div>
+          <ul class="cw-row" id="cw-row"></ul>
+        </section>
+        <section aria-labelledby="f-h">
+          <div class="sec-h"><h2 id="f-h">Folders</h2><span class="meta" id="f-total"></span></div>
+          <ul class="folders list" id="folders"></ul>
+        </section>
+      </div>
+      <section id="lib-results" hidden aria-label="Search results">
+        <div class="sec-h"><h2>Results</h2><span class="meta" id="res-count" aria-live="polite"></span></div>
+        <ul class="vlist list" id="results"></ul>
+      </section>
+    </section>
+
+    <!-- Music -->
+    <section class="screen" id="scr-music" aria-label="Music" hidden>
+      <header class="appbar"><div class="bar-title"><h1>Music</h1></div></header>
+      <p class="lede">Any video can play as audio. Background play keeps it going with the screen off.</p>
+      <ul class="group" id="music-list" style="margin-top:var(--s-4)"></ul>
+    </section>
+
+    <!-- Network -->
+    <section class="screen" id="scr-network" aria-label="Network stream" hidden>
+      <header class="appbar"><div class="bar-title"><h1>Network stream</h1></div></header>
+      <form class="card" id="net-form" novalidate>
+        <div class="field">
+          <label for="net-url">Stream URL</label>
+          <div class="input-wrap"><i data-icon="link"></i><input class="input" id="net-url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://example.com/live.m3u8" aria-describedby="net-help"></div>
+          <p class="help" id="net-help">HTTP, HLS (.m3u8), DASH (.mpd), RTSP and RTMP</p>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn btn-ghost pressable" id="net-paste"><i data-icon="clipboard" class="i-sm"></i>Paste</button>
+          <button type="submit" class="btn btn-primary pressable"><i data-icon="play" class="i-sm"></i>Play</button>
+        </div>
+      </form>
+      <div class="sec-h"><h2 id="hist-h">Recent</h2><button class="linkbtn pressable" id="hist-clear">Clear all</button></div>
+      <ul class="group hist" id="hist" aria-labelledby="hist-h"></ul>
+    </section>
+
+    <!-- Settings -->
+    <section class="screen" id="scr-settings" aria-label="Settings" hidden>
+      <header class="appbar"><div class="bar-title"><h1>Settings</h1></div></header>
+
+      <h2 class="group-h">Playback</h2>
+      <div class="group">
+        <div class="row stack">
+          <div class="lbl"><i data-icon="cpu"></i><div><span id="dec-l">Decoder</span><span class="sub" id="dec-desc"></span></div></div>
+          <div class="seg" role="radiogroup" aria-labelledby="dec-l" data-seg="decoder"><button role="radio" data-v="HW">HW</button><button role="radio" data-v="HW+">HW+</button><button role="radio" data-v="SW">SW</button></div>
+        </div>
+        <button class="row pressable" role="switch" data-switch="resume"><i data-icon="history"></i><span class="lbl">Resume where you left off<span class="sub">Remembers position per file</span></span><span class="tr"></span></button>
+        <button class="row pressable" role="switch" data-switch="bgPlay"><i data-icon="headphones"></i><span class="lbl">Background play<span class="sub">Keep audio playing when you leave the app</span></span><span class="tr"></span></button>
+      </div>
+
+      <h2 class="group-h">Gestures</h2>
+      <div class="group">
+        <button class="row pressable" role="switch" data-switch="gestures.brightness"><i data-icon="sun"></i><span class="lbl">Brightness<span class="sub">Swipe up or down on the left half</span></span><span class="tr"></span></button>
+        <button class="row pressable" role="switch" data-switch="gestures.volume"><i data-icon="volume"></i><span class="lbl">Volume<span class="sub">Swipe up or down on the right half</span></span><span class="tr"></span></button>
+        <button class="row pressable" role="switch" data-switch="gestures.seek"><i data-icon="move-h"></i><span class="lbl">Swipe to seek<span class="sub">Drag sideways with a preview</span></span><span class="tr"></span></button>
+        <button class="row pressable" role="switch" data-switch="gestures.doubletap"><i data-icon="rewind"></i><span class="lbl">Double-tap to skip<span class="sub">10 seconds per tap</span></span><span class="tr"></span></button>
+        <button class="row pressable" role="switch" data-switch="gestures.pinch"><i data-icon="zoom"></i><span class="lbl">Pinch to zoom<span class="sub">Fit, Fill, Crop, 100%</span></span><span class="tr"></span></button>
+        <button class="row pressable" role="switch" data-switch="gestures.longpress"><i data-icon="ff"></i><span class="lbl">Hold for 2x speed<span class="sub">Release to return</span></span><span class="tr"></span></button>
+      </div>
+
+      <h2 class="group-h">Subtitles</h2>
+      <div class="group">
+        <div class="row stack">
+          <div class="lbl"><i data-icon="type"></i><div><span id="sd-l">Default text size</span></div></div>
+          <div class="seg" role="radiogroup" aria-labelledby="sd-l" data-seg="subDef.size"><button role="radio" data-v="S">S</button><button role="radio" data-v="M">M</button><button role="radio" data-v="L">L</button><button role="radio" data-v="XL">XL</button></div>
+        </div>
+        <button class="row pressable" id="lang-row"><i data-icon="globe"></i><span class="lbl">Preferred language<span class="sub">Picked first when a file has several</span></span><span class="val" id="lang-val"></span><i data-icon="chevron-right" class="i-sm chev"></i></button>
+      </div>
+
+      <h2 class="group-h">Appearance</h2>
+      <div class="group">
+        <div class="row stack">
+          <div class="lbl"><i data-icon="moon"></i><div><span id="th-l">Theme</span><span class="sub">The player always stays dark</span></div></div>
+          <div class="seg" role="radiogroup" aria-labelledby="th-l" data-seg="theme"><button role="radio" data-v="dark">Dark</button><button role="radio" data-v="light">Light</button><button role="radio" data-v="system">System</button></div>
+        </div>
+      </div>
+
+      <h2 class="group-h">Privacy</h2>
+      <div class="group">
+        <button class="row pressable" id="priv-open"><i data-icon="shield"></i><span class="lbl">Privacy folder<span class="sub" id="priv-sub"></span></span><i data-icon="chevron-right" class="i-sm chev"></i></button>
+        <button class="row pressable" role="switch" id="pin-switch"><i data-icon="lock"></i><span class="lbl">Protect with PIN<span class="sub" id="pin-sub">Ask for a 4-digit PIN to open</span></span><span class="tr"></span></button>
+      </div>
+      <p class="meta" style="padding:var(--s-6) var(--s-5) 0;text-align:center">OM Player 0.1 · prototype · no ads, ever</p>
+    </section>
+  </main>
+
+  <!-- Folder view (push) -->
+  <section class="screen push" id="scr-folder" hidden aria-labelledby="folder-title">
+    <header class="appbar with-back">
+      <button class="icon-btn pressable" id="folder-back" aria-label="Back to library"><i data-icon="arrow-left"></i></button>
+      <div class="bar-title"><h1 id="folder-title"></h1><p id="folder-sub"></p></div>
+      <button class="icon-btn pressable" id="sort-btn-2" aria-label="Sort" aria-haspopup="menu" aria-expanded="false"><i data-icon="sort"></i></button>
+      <button class="icon-btn pressable view-toggle" aria-label="Switch to grid view"><i data-icon="grid"></i></button>
+    </header>
+    <ul class="vlist list" id="vlist"></ul>
+  </section>
+
+  <nav class="nav" aria-label="Primary">
+    <button class="pressable" data-tab="videos"><span class="pill"><i data-icon="video"></i></span>Videos</button>
+    <button class="pressable" data-tab="music"><span class="pill"><i data-icon="music"></i></span>Music</button>
+    <button class="pressable" data-tab="network"><span class="pill"><i data-icon="globe"></i></span>Network</button>
+    <button class="pressable" data-tab="settings"><span class="pill"><i data-icon="settings"></i></span>Settings</button>
+  </nav>
+</div>
+
+<!-- Library sheets -->
+<div class="sheet-layer" id="app-sheets">
+  <div class="scrim" data-close-sheet></div>
+  <div class="sheet" data-sheet="info" role="dialog" aria-modal="true" aria-labelledby="info-h">
+    <div class="sheet-grab"><div class="handle"></div><div class="sheet-head"><h3 id="info-h">Info</h3><button class="icon-btn pressable" data-close-sheet aria-label="Close"><i data-icon="x"></i></button></div></div>
+    <div class="sheet-body"><dl class="kv" id="info-kv"></dl></div>
+  </div>
+  <div class="sheet" data-sheet="rename" role="dialog" aria-modal="true" aria-labelledby="ren-h">
+    <div class="sheet-grab"><div class="handle"></div><div class="sheet-head"><h3 id="ren-h">Rename</h3><button class="icon-btn pressable" data-close-sheet aria-label="Close"><i data-icon="x"></i></button></div></div>
+    <form class="sheet-body" id="ren-form">
+      <div class="field sheet-sec"><label for="ren-input">File name</label><input class="input plain" id="ren-input" data-autofocus autocomplete="off" spellcheck="false"><p class="help" id="ren-help">Extension stays .mp4</p></div>
+      <div class="btn-row" style="margin-top:var(--s-4)"><button type="button" class="btn btn-ghost pressable" data-close-sheet>Cancel</button><button type="submit" class="btn btn-primary pressable">Save</button></div>
+    </form>
+  </div>
+  <div class="sheet" data-sheet="pin" role="dialog" aria-modal="true" aria-labelledby="pin-h">
+    <div class="sheet-grab"><div class="handle"></div><div class="sheet-head"><h3 id="pin-h">Enter PIN</h3><button class="icon-btn pressable" data-close-sheet aria-label="Close"><i data-icon="x"></i></button></div></div>
+    <div class="sheet-body">
+      <div class="pin-dots" id="pin-dots" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <p class="pin-msg" id="pin-msg" role="status" aria-live="polite"></p>
+      <p class="sr-only" id="pin-live" role="status" aria-live="polite"></p>
+      <div class="keypad" id="keypad"></div>
+    </div>
+  </div>
+  <div class="sheet" data-sheet="lang" role="dialog" aria-modal="true" aria-labelledby="lang-h">
+    <div class="sheet-grab"><div class="handle"></div><div class="sheet-head"><h3 id="lang-h">Preferred language</h3><button class="icon-btn pressable" data-close-sheet aria-label="Close"><i data-icon="x"></i></button></div></div>
+    <div class="sheet-body"><div class="opts" role="radiogroup" aria-labelledby="lang-h" id="lang-opts"></div></div>
+  </div>
+</div>
+
+<!-- Player -->
+<div class="player scheme-dark" id="player" role="dialog" aria-modal="true" aria-label="Video player">
+  <div class="stage" id="stage">
+    <div class="vwrap" id="vwrap">
+      <canvas id="vcanvas" width="960" height="540" aria-hidden="true"></canvas>
+      <div class="aart" aria-hidden="true"><div class="disc"><i data-icon="disc"></i></div><p id="aart-title"></p><small>Playing as audio</small></div>
+    </div>
+    <div class="dim" id="dim"></div>
+    <p class="subline" id="subline"></p>
+    <div class="gesture" id="gesture" aria-hidden="true"></div>
+    <div class="ripple l" id="rip-l" aria-hidden="true"><span class="rc"></span><span class="rl"><i data-icon="rewind"></i><b>10s</b></span></div>
+    <div class="ripple r" id="rip-r" aria-hidden="true"><span class="rc"></span><span class="rl"><i data-icon="ff"></i><b>10s</b></span></div>
+    <div class="flash" id="flash"></div>
+    <div class="hud pill-ui" id="hud" role="status"><span id="hud-ic"></span><span class="hud-bar"><i id="hud-fill"></i></span><span class="hud-txt"><b id="hud-b"></b><small id="hud-s"></small></span></div>
+    <div class="badge2x pill-ui" id="badge2x" role="status"><i data-icon="ff" class="i-sm"></i>2x speed</div>
+    <div class="vtoast pill-ui" id="vtoast" role="status"></div>
+
+    <div class="controls" id="controls">
+      <div class="ptop">
+        <button class="icon-btn pressable" id="p-back" aria-label="Close player"><i data-icon="arrow-left"></i></button>
+        <div class="ptitle"><h2 id="p-title"></h2><p id="p-sub"></p></div>
+        <button class="icon-btn pressable" id="p-subs" aria-label="Subtitles" aria-haspopup="dialog"><i data-icon="captions"></i></button>
+        <button class="icon-btn pressable" id="p-audio" aria-label="Audio tracks" aria-haspopup="dialog"><i data-icon="headphones"></i></button>
+        <button class="icon-btn pressable" id="p-more" aria-label="More options" aria-haspopup="dialog"><i data-icon="more"></i></button>
+      </div>
+      <div class="pcenter"><button class="bigplay pill-ui pressable" id="p-play" aria-label="Pause"></button></div>
+      <div class="pbottom">
+        <div class="seekrow">
+          <span class="tc" id="p-cur">0:00</span>
+          <div class="seek" id="seek">
+            <div class="track"><span class="buf"></span><span class="played"></span></div>
+            <div class="ticks" id="p-ticks"></div>
+            <div id="p-ab"></div>
+            <div class="knob-rail"><span class="knob"></span></div>
+            <div class="prev-rail"><div class="preview" id="preview"><canvas id="pcanvas" width="320" height="180"></canvas><span class="pill-ui" id="prev-time">0:00</span></div></div>
+            <input type="range" id="p-range" min="0" max="100" step="1" value="0" aria-label="Seek">
+          </div>
+          <span class="tc" id="p-dur">0:00</span>
+        </div>
+        <div class="brow">
+          <button class="icon-btn pressable" id="p-lock" aria-label="Lock controls"><i data-icon="lock"></i></button>
+          <button class="icon-btn pressable" id="p-prev" aria-label="Previous video"><i data-icon="skip-back"></i></button>
+          <button class="icon-btn pressable" id="p-next" aria-label="Next video"><i data-icon="skip-fwd"></i></button>
+          <span class="sp"></span>
+          <button class="icon-btn pressable" id="p-aspect" aria-label="Aspect ratio: Fit"><i data-icon="aspect"></i></button>
+          <button class="icon-btn pressable speed-btn" id="p-speed" aria-label="Playback speed 1x" aria-haspopup="dialog">1x</button>
+          <button class="icon-btn pressable" id="p-pip" aria-label="Picture in picture"><i data-icon="pip"></i></button>
+          <button class="icon-btn pressable" id="p-rotate" aria-label="Rotate to portrait"><i data-icon="rotate"></i></button>
+        </div>
+      </div>
+    </div>
+    <button class="unlock pill-ui pressable" id="p-unlock" aria-label="Unlock controls"><i data-icon="unlock"></i></button>
+
+    <!-- Player sheets -->
+    <div class="sheet-layer" id="player-sheets">
+      <div class="scrim" data-close-sheet></div>
+
+      <div class="sheet" data-sheet="audio" role="dialog" aria-modal="true" aria-labelledby="au-h">
+        <div class="sheet-grab"><div class="handle"></div><div class="sheet-head"><h3 id="au-h">Audio track</h3><button class="icon-btn pressable" data-close-sheet aria-label="Close"><i data-icon="x"></i></button></div></div>
+        <div class="sheet-body"><div class="opts" role="radiogroup" aria-labelledby="au-h" id="audio-opts"></div></div>
+      </div>
+
+      <div class="sheet" data-sheet="subs" role="dialog" aria-modal="true" aria-labelledby="su-h">
+        <div class="sheet-grab"><div class="handle"></div><div class="sheet-head"><h3 id="su-h">Subtitles</h3><button class="icon-btn pressable" data-close-sheet aria-label="Close"><i data-icon="x"></i></button></div></div>
+        <div class="sheet-body">
+          <div class="sheet-sec" style="padding-top:var(--s-1)"><h4 id="st-h">Track</h4><div class="opts" role="radiogroup" aria-labelledby="st-h" id="sub-opts"></div>
+            <button class="btn btn-ghost btn-block pressable" id="sub-search" style="margin-top:var(--s-2)"><i data-icon="search" class="i-sm"></i><span>Search online</span></button>
+            <div class="found opts" id="sub-found" aria-live="polite"></div>
+          </div>
+          <div class="sheet-sec"><h4>Style</h4>
+            <div class="sub-preview"><p class="subline" id="sub-prev">Follow the harbor lights.</p></div>
+            <p class="meta" id="ss-l" style="margin:var(--s-3) 0 var(--s-2)">Size</p>
+            <div class="seg" role="radiogroup" aria-labelledby="ss-l" data-seg="p.subs.size"><button role="radio" data-v="S">S</button><button role="radio" data-v="M">M</button><button role="radio" data-v="L">L</button><button role="radio" data-v="XL">XL</button></div>
+            <p class="meta" id="sc-l" style="margin:var(--s-3) 0 var(--s-2)">Colour</p>
+            <div class="swatches" role="radiogroup" aria-labelledby="sc-l" id="swatches"></div>
+            <p class="meta" id="sb-l" style="margin:var(--s-3) 0 var(--s-2)">Background</p>
+            <div class="seg" role="radiogroup" aria-labelledby="sb-l" data-seg="p.subs.bg"><button role="radio" data-v="none">None</button><button role="radio" data-v="shadow">Shadow</button><button role="radio" data-v="box">Box</button></div>
+          </div>
+          <div class="sheet-sec"><h4 id="sy-h">Sync offset</h4>
+            <div class="stepper" role="group" aria-labelledby="sy-h">
+              <button class="icon-btn pressable" style="background:var(--surface-2)" id="sync-minus" aria-label="Show subtitles 50 milliseconds earlier"><i data-icon="minus"></i></button>
+              <output class="v" id="sync-v" aria-live="polite">0 ms</output>
+              <button class="icon-btn pressable" style="background:var(--surface-2)" id="sync-plus" aria-label="Show subtitles 50 milliseconds later"><i data-icon="plus"></i></button>
+              <button class="linkbtn pressable" id="sync-reset">Reset</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sheet" data-sheet="speed" role="dialog" aria-modal="true" aria-labelledby="sp-h">
+        <div class="sheet-grab"><div class="handle"></div><div class="sheet-head"><h3 id="sp-h">Playback speed</h3><button class="icon-btn pressable" data-close-sheet aria-label="Close"><i data-icon="x"></i></button></div></div>
+        <div class="sheet-body">
+          <div class="speed-read">
+            <button class="icon-btn pressable" style="background:var(--surface-2)" id="sp-minus" aria-label="Slower"><i data-icon="minus"></i></button>
+            <output id="sp-out">1x</output>
+            <button class="icon-btn pressable" style="background:var(--surface-2)" id="sp-plus" aria-label="Faster"><i data-icon="plus"></i></button>
+          </div>
+          <input class="range-full" type="range" id="sp-range" min="0.25" max="4" step="0.05" value="1" aria-label="Playback speed">
+          <div class="range-ends"><span>0.25x</span><span>4x</span></div>
+          <div class="chips" id="sp-chips" role="radiogroup" aria-label="Speed presets" style="margin-top:var(--s-4)"></div>
+          <p class="hint">Tip: press and hold the video for 2x while held.</p>
+        </div>
+      </div>
+
+      <div class="sheet" data-sheet="more" role="dialog" aria-modal="true" aria-labelledby="mo-h">
+        <div class="sheet-grab"><div class="handle"></div><div class="sheet-head"><h3 id="mo-h">More</h3><button class="icon-btn pressable" data-close-sheet aria-label="Close"><i data-icon="x"></i></button></div></div>
+        <div class="sheet-body">
+          <div class="sheet-sec" style="padding-top:var(--s-1)"><h4 id="sl-h">Sleep timer <span id="sleep-left" class="tabular" style="text-transform:none;letter-spacing:0"></span></h4>
+            <div class="chips scroll" role="radiogroup" aria-labelledby="sl-h" id="sleep-chips"></div>
+          </div>
+          <div class="sheet-sec"><h4>Tools</h4>
+            <div class="tiles">
+              <button class="tile pressable" id="t-ab"><i data-icon="repeat"></i><span class="lbl"><b>A-B repeat</b><small id="ab-state">Tap to set A</small></span></button>
+              <button class="tile pressable" id="t-eq"><i data-icon="sliders"></i><span class="lbl"><b>Equalizer</b><small id="eq-state">Flat</small></span></button>
+              <button class="tile pressable" role="switch" data-switch="bgPlay"><span class="top"><i data-icon="headphones"></i><span class="tr"></span></span><span class="lbl"><b>Background play</b><small>Audio continues off-screen</small></span></button>
+              <button class="tile pressable" id="t-shot"><i data-icon="image"></i><span class="lbl"><b>Screenshot</b><small>Save current frame</small></span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sheet" data-sheet="eq" role="dialog" aria-modal="true" aria-labelledby="eq-h">
+        <div class="sheet-grab"><div class="handle"></div><div class="sheet-head"><h3 id="eq-h">Equalizer</h3>
+          <button class="icon-btn pressable" role="switch" data-switch="p.eq.on" aria-label="Equalizer enabled" style="width:56px"><span class="tr"></span></button>
+          <button class="icon-btn pressable" data-close-sheet aria-label="Close"><i data-icon="x"></i></button></div></div>
+        <div class="sheet-body">
+          <div class="chips scroll" role="radiogroup" aria-label="Presets" id="eq-presets"></div>
+          <div class="eq-wrap" id="eq-wrap">
+            <svg class="eq-curve" viewBox="0 0 500 100" preserveAspectRatio="none" aria-hidden="true"><line x1="0" y1="50" x2="500" y2="50"/><path id="eq-path"/></svg>
+            <div class="bands" id="bands"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="pip-ui">
+    <button class="icon-btn pressable" id="pip-expand" aria-label="Expand player"><i data-icon="expand"></i></button>
+    <button class="icon-btn pressable" id="pip-close" aria-label="Close player"><i data-icon="x"></i></button>
+  </div>
+</div>
+
+<div class="menu-bd" id="menu-bd" hidden></div>
+<div class="menu" id="menu" role="menu" hidden></div>
+<div class="toast" id="toast" role="status" aria-live="polite"><span class="msg" id="toast-msg"></span><button class="linkbtn pressable" id="toast-act"></button></div>
+
+<script>
+(() => {
+'use strict';
+
+/* =========================================================
+   Utilities
+   ========================================================= */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmt = sec => {
+  sec = Math.max(0, Math.floor(sec));
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
+};
+const fmtSize = mb => mb >= 1024 ? (mb / 1024).toFixed(1) + ' GB' : Math.round(mb) + ' MB';
+const ago = t => { const m = Math.round((Date.now() - t) / 60000); if (m < 1) return 'just now'; if (m < 60) return m + ' min ago'; const h = Math.round(m / 60); if (h < 24) return h + ' h ago'; return Math.round(h / 24) + ' d ago'; };
+const reduceMQ = matchMedia('(prefers-reduced-motion: reduce)');
+const capture = (el, id) => { try { el.setPointerCapture(id); } catch {} };
+
+// Keyboard-vs-pointer tracking: keyboard-initiated actions get no animation.
+let kbd = false;
+addEventListener('keydown', e => { if (!['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) kbd = true; }, true);
+addEventListener('pointerdown', () => { kbd = false; }, true);
+const noMotion = () => kbd || reduceMQ.matches;
+
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let EASE_OUT = 'ease-out', EASE_DRAWER = 'ease-out';
+function anim(el, frames, duration, easing = EASE_OUT) {
+  if (noMotion() || !el.animate) return null;
+  const a = el.animate(frames, { duration, easing });
+  // Throttled or backgrounded pages may never resolve `finished`; settle it on time anyway (unless cancelled)
+  let cancelled = false;
+  const cancel = a.cancel.bind(a);
+  a.cancel = () => { cancelled = true; cancel(); };
+  const finished = new Promise((res, rej) => {
+    a.finished.then(res, rej);
+    setTimeout(() => { if (!cancelled) res(a); }, duration + 100);
+  });
+  Object.defineProperty(a, 'finished', { value: finished });
+  return a;
+}
+
+/* Icons (Lucide style: 24 viewBox, 1.75 stroke, round caps) */
+const ICONS = {
+  'play': '<path d="M6 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 6 4.5z"/>',
+  'pause': '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>',
+  'search': '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  'arrow-left': '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+  'chevron-right': '<path d="m9 18 6-6-6-6"/>',
+  'more': '<circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>',
+  'grid': '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
+  'list': '<path d="M3 6h.01M3 12h.01M3 18h.01M8 6h13M8 12h13M8 18h13"/>',
+  'sort': '<path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/>',
+  'camera': '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+  'download': '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+  'film': '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18M3 7.5h4M3 12h18M3 16.5h4M17 3v18M17 7.5h4M17 16.5h4"/>',
+  'message': '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+  'send': '<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
+  'monitor': '<rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8M12 17v4"/>',
+  'video': '<path d="m16 13 5.22 3.48a.5.5 0 0 0 .78-.42V7.87a.5.5 0 0 0-.75-.43L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/>',
+  'music': '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  'globe': '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
+  'settings': '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  'captions': '<rect width="18" height="14" x="3" y="5" rx="2"/><path d="M7 15h4M15 15h2M7 11h2M13 11h4"/>',
+  'headphones': '<path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/>',
+  'lock': '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  'unlock': '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>',
+  'skip-back': '<path d="M19 20 9 12l10-8v16z"/><path d="M5 19V5"/>',
+  'skip-fwd': '<path d="m5 4 10 8-10 8V4z"/><path d="M19 5v14"/>',
+  'aspect': '<rect width="20" height="14" x="2" y="5" rx="2"/><path d="M6 12V9h3M18 12v3h-3"/>',
+  'pip': '<path d="M21 9V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4"/><rect width="10" height="7" x="12" y="13" rx="2"/>',
+  'rotate': '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
+  'sun': '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+  'volume': '<path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>',
+  'volume-x': '<path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="m22 9-6 6M16 9l6 6"/>',
+  'x': '<path d="M18 6 6 18M6 6l12 12"/>',
+  'check': '<path d="M20 6 9 17l-5-5"/>',
+  'minus': '<path d="M5 12h14"/>',
+  'plus': '<path d="M5 12h14M12 5v14"/>',
+  'repeat': '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
+  'sliders': '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M2 14h4M10 8h4M18 16h4"/>',
+  'image': '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/>',
+  'info': '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
+  'pencil': '<path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/>',
+  'share': '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98"/>',
+  'eye-off': '<path d="M10.73 5.08A10.74 10.74 0 0 1 21.94 11.65a1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49"/><path d="M14.08 14.16a3 3 0 0 1-4.24-4.24"/><path d="M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14"/><path d="m2 2 20 20"/>',
+  'eye': '<path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/>',
+  'link': '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  'history': '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
+  'clipboard': '<rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>',
+  'shield': '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+  'cpu': '<rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2M15 20v2M2 15h2M2 9h2M20 15h2M20 9h2M9 2v2M9 20v2"/>',
+  'moon': '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+  'type': '<path d="M4 7V4h16v3M9 20h6M12 4v16"/>',
+  'ff': '<path d="m13 19 9-7-9-7v14z"/><path d="m2 19 9-7-9-7v14z"/>',
+  'rewind': '<path d="m11 19-9-7 9-7v14z"/><path d="m22 19-9-7 9-7v14z"/>',
+  'zoom': '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3M11 8v6M8 11h6"/>',
+  'move-h': '<path d="m18 8 4 4-4 4M2 12h20M6 8l-4 4 4 4"/>',
+  'disc': '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="2"/><path d="M6 12a6 6 0 0 1 6-6"/>',
+  'loader': '<path d="M21 12a9 9 0 1 1-6.22-8.56"/>',
+  'expand': '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>',
+  'backspace': '<path d="M10 5a2 2 0 0 0-1.34.52l-6.33 5.74a1 1 0 0 0 0 1.48l6.33 5.74A2 2 0 0 0 10 19h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"/><path d="m12 9 6 6M18 9l-6 6"/>',
+  'folder': '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+};
+const ic = (name, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONS[name] || ''}</svg>`;
+function hydrateIcons(root = document) { $$('i[data-icon]', root).forEach(el => { el.outerHTML = ic(el.dataset.icon, el.className); }); }
+
+/* =========================================================
+   Sample data (fictional)
+   ========================================================= */
+let seed = 11;
+const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const FOLDERS = [
+  { id: 'camera', name: 'Camera', icon: 'camera', path: 'DCIM/Camera', short: true, titles: ['Beach sunset timelapse', 'VID_20261024_181422', 'Maya first steps', 'Harbor fireworks', 'Rooftop rain', 'VID_20261003_090511', 'Mountain switchbacks', 'Kitchen experiment', 'Night market walk', 'Dog vs. sprinkler', 'Train window, Alps', 'VID_20260921_172033'] },
+  { id: 'downloads', name: 'Downloads', icon: 'download', path: 'Download', titles: ['Northern Drift S01E03', 'Lecture 07 - Signals and Systems', 'Synth patch walkthrough', 'Bread scoring basics', 'City at 4am (short film)', 'Coastline drone reel', 'Northern Drift S01E04'] },
+  { id: 'movies', name: 'Movies', icon: 'film', path: 'Movies', long: true, titles: ['The Glass Orchard', 'Midnight Cartographers', 'Salt and Ember', 'Low Tide Kingdom', 'Paper Satellites', 'The Quiet Forge', 'Ninefold Road', 'Afterlight Motel', 'Copper Meridian'] },
+  { id: 'whatsapp', name: 'WhatsApp Video', icon: 'message', path: 'Android/media/WhatsApp Video', short: true, titles: ['VID-20261026-WA0012', 'VID-20261025-WA0004', 'Birthday surprise', 'VID-20261019-WA0031', 'VID-20261011-WA0007', 'Grandpa singing', 'VID-20260930-WA0002', 'VID-20260928-WA0019'] },
+  { id: 'telegram', name: 'Telegram', icon: 'send', path: 'Telegram/Telegram Video', titles: ['Course intro', 'Studio session live', 'Recipe - one pan pasta', 'Mars rover explainer', 'Weekly roundup 42'] },
+  { id: 'screen', name: 'Screen recordings', icon: 'monitor', path: 'Movies/Screen recordings', short: true, titles: ['Screen_Recording_20261026_2214', 'Bug repro - login flow', 'Screen_Recording_20261020_0931', 'Game clip - final lap'] },
+];
+const RES = ['1080p', '720p', '4K', '1080p', '480p', '1080p'];
+const VIDEOS = [];
+FOLDERS.forEach(f => f.titles.forEach((title, i) => {
+  const dur = f.long ? 5200 + rnd() * 2600 : f.short ? 12 + rnd() * 420 : 300 + rnd() * 2400;
+  const res = f.id === 'screen' ? '1080p' : RES[Math.floor(rnd() * RES.length)];
+  const mbps = res === '4K' ? 2.6 : res === '1080p' ? 0.7 : res === '720p' ? 0.35 : 0.15;
+  VIDEOS.push({ id: `${f.id}-${i}`, folder: f.id, title, dur: Math.round(dur), res, size: Math.max(2, dur * mbps), hue: Math.floor(rnd() * 360),
+    progress: 0, last: 0, isNew: i < 2 && rnd() > 0.25, date: Date.now() - (i * 2 + rnd() * 3) * 86400000 });
+}));
+// Seed a few in-progress items
+[['movies-0', .62], ['downloads-0', .34], ['movies-3', .18], ['telegram-0', .71], ['downloads-1', .45], ['camera-6', .5]].forEach(([id, p], k) => {
+  const v = VIDEOS.find(x => x.id === id); v.progress = p; v.last = Date.now() - k * 3600e3 * 5; v.isNew = false;
+});
+const MUSIC = ['Harbor Lights (demo)', 'Low Tide - live take', 'Paper Satellites OST - Main theme', 'Late train home', 'Copper Meridian - End credits', 'Studio session, track 3']
+  .map((title, i) => ({ id: 'music-' + i, folder: 'music', title, dur: 150 + Math.round(rnd() * 220), res: 'Audio', size: 4 + rnd() * 8, hue: Math.floor(rnd() * 360), progress: 0, last: 0, isNew: false, date: Date.now() }));
+const byId = id => VIDEOS.find(v => v.id === id) || MUSIC.find(v => v.id === id) || S.netItems.find(v => v.id === id);
+
+/* =========================================================
+   State
+   ========================================================= */
+const S = {
+  route: { name: 'videos', id: null },
+  view: 'list',
+  sort: { key: 'name', dir: 1 },
+  query: '',
+  theme: 'dark',
+  decoder: 'HW+',
+  resume: true,
+  bgPlay: false,
+  gestures: { brightness: true, volume: true, seek: true, doubletap: true, pinch: true, longpress: true },
+  subDef: { size: 'M', lang: 'English' },
+  pin: null,
+  privacyUnlocked: false,
+  hidden: new Set(),
+  history: [
+    { url: 'https://media.example.org/live/harbor-cam.m3u8', t: Date.now() - 42 * 60e3 },
+    { url: 'rtsp://192.168.1.40:554/stream1', t: Date.now() - 5 * 3600e3 },
+    { url: 'https://cdn.example.net/vod/lecture-08/manifest.mpd', t: Date.now() - 3 * 86400e3 },
+  ],
+  netItems: [],
+  p: {
+    video: null, queue: [], t: 0, playing: false, rate: 1, held: false, vol: .7, bright: .85,
+    mode: 'Fit', zoom: 1, locked: false, landscape: true, rot: false, pip: false, audioOnly: false, scrubbing: false,
+    audio: 0, sub: 'en', subTracks: null, subs: { size: 'M', color: 'white', bg: 'shadow', offset: 0 },
+    ab: { a: null, b: null }, sleep: 'off', sleepEnd: 0,
+    eq: { on: true, preset: 'Flat', bands: [0, 0, 0, 0, 0] }, fit: { fw: 1, fh: 1, sw: 1, sh: 1 },
+  },
+};
+const P = S.p;
+const getPath = path => path.split('.').reduce((o, k) => o[k], S);
+const setPath = (path, v) => { const ks = path.split('.'); const last = ks.pop(); ks.reduce((o, k) => o[k], S)[last] = v; };
+
+/* =========================================================
+   Theme
+   ========================================================= */
+const lightMQ = matchMedia('(prefers-color-scheme: light)');
+function effectiveTheme() {
+  return S.theme === 'system' ? (lightMQ.matches ? 'light' : 'dark') : S.theme;   // the player scopes its own dark tokens in CSS
+}
+function applyTheme() { document.documentElement.dataset.theme = effectiveTheme(); }
+lightMQ.addEventListener('change', applyTheme);
+
+/* =========================================================
+   Toast
+   ========================================================= */
+const toastEl = $('#toast'); let toastT = 0, toastAction = null;
+function toast(msg, opts = {}) {
+  $('#toast-msg').textContent = msg;
+  $('#toast-act').textContent = opts.action || '';
+  toastAction = opts.onAction || null;
+  toastEl.classList.toggle('instant', noMotion());
+  toastEl.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => toastEl.classList.remove('show'), opts.action ? 5000 : 2600);
+}
+// Inside the (possibly rotated) player, messages go to the in-stage toast instead.
+const say = msg => (P.video && !P.pip ? vtoast(msg, 1600) : toast(msg));
+$('#toast-act').addEventListener('click', () => { toastEl.classList.remove('show'); toastAction && toastAction(); toastAction = null; });
+
+/* =========================================================
+   Menu (scales from its trigger)
+   ========================================================= */
+const menuEl = $('#menu'), menuBd = $('#menu-bd'); let menuTrigger = null, menuItems = [], menuOpen = false;
+function openMenu(trigger, items, label) {
+  if (menuOpen) closeMenu(false);
+  menuTrigger = trigger; menuItems = items; menuOpen = true;
+  menuEl.setAttribute('aria-label', label);
+  menuEl.innerHTML = items.map((it, i) => {
+    if (it.sep) return '<div class="msep" role="separator"></div>';
+    if (it.heading) return `<div class="mlabel" role="presentation">${esc(it.heading)}</div>`;
+    const radio = it.checked !== undefined;
+    return `<button class="mitem pressable${it.danger ? ' danger' : ''}" role="${radio ? 'menuitemradio' : 'menuitem'}"${radio ? ` aria-checked="${it.checked}"` : ''} data-i="${i}" tabindex="-1">${ic(it.icon)}<span>${esc(it.label)}</span>${it.checked ? ic('check', 'i-sm mcheck') : ''}</button>`;
+  }).join('');
+  menuEl.hidden = false; menuBd.hidden = false;
+  trigger.setAttribute('aria-expanded', 'true');
+  const r = trigger.getBoundingClientRect(), mw = menuEl.offsetWidth, mh = menuEl.offsetHeight;
+  let ox = 'right', left = r.right - mw;
+  if (r.left + r.width / 2 < innerWidth / 2) { ox = 'left'; left = r.left; }
+  left = clamp(left, 8, innerWidth - mw - 8);
+  let oy = 'top', top = r.bottom + 4;
+  if (top + mh > innerHeight - 8) { oy = 'bottom'; top = Math.max(8, r.top - mh - 4); }
+  Object.assign(menuEl.style, { left: left + 'px', top: top + 'px', transformOrigin: `${ox} ${oy}` });
+  menuEl.classList.toggle('instant', noMotion());
+  void menuEl.offsetWidth;
+  menuEl.classList.add('open');
+  const first = menuEl.querySelector('.mitem[aria-checked="true"]') || menuEl.querySelector('.mitem');
+  first && first.focus({ preventScroll: true });
+}
+function closeMenu(refocus = true) {
+  if (!menuOpen) return;
+  menuOpen = false;
+  menuEl.classList.toggle('instant', noMotion());
+  menuEl.classList.remove('open'); menuBd.hidden = true;
+  menuTrigger && menuTrigger.setAttribute('aria-expanded', 'false');
+  setTimeout(() => { if (!menuOpen) menuEl.hidden = true; }, noMotion() ? 0 : 130);
+  if (refocus && menuTrigger && document.contains(menuTrigger)) menuTrigger.focus({ preventScroll: true });
+}
+menuBd.addEventListener('pointerdown', e => { e.preventDefault(); closeMenu(false); });
+menuEl.addEventListener('click', e => {
+  const b = e.target.closest('.mitem'); if (!b) return;
+  const it = menuItems[+b.dataset.i]; const trig = menuTrigger;
+  if (it.keepOpen) { it.run(trig); return; }
+  closeMenu(false); it.run(trig);
+});
+menuEl.addEventListener('keydown', e => {
+  const items = $$('.mitem', menuEl); const i = items.indexOf(document.activeElement);
+  if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+  else if (e.key === 'Tab') { closeMenu(); }
+});
+
+/* =========================================================
+   Sheets (drag to dismiss, velocity > 0.11, damping)
+   ========================================================= */
+const sheetStack = [];
+const sheetOf = id => $(`.sheet[data-sheet="${id}"]`);
+
+/* ---- Overlay history: one history entry per open modal (player or sheet) so Back dismisses the topmost one ---- */
+const PLAYER = 'player';
+const ovHist = [];                       // tokens (sheet elements / PLAYER) that own a history entry, bottom to top
+const hq = { busy: false, q: [], timer: 0 };
+function hdrain() {
+  if (hq.busy) return;
+  const op = hq.q.shift(); if (!op) return;
+  if (op.type === 'back') {
+    hq.busy = true; clearTimeout(hq.timer);
+    hq.timer = setTimeout(() => { hq.busy = false; hdrain(); }, 500);   // safety net if popstate never arrives
+    history.go(-op.n);
+  } else if (op.type === 'push') { history.pushState({ om: 1 }, ''); hdrain(); }
+  else { op.fn(); hdrain(); }
+}
+const hrun = op => { hq.q.push(op); hdrain(); };
+const afterHist = fn => hrun({ type: 'fn', fn });          // run once earlier history work has settled
+function ovPush(tok) { if (ovHist.includes(tok)) return; ovHist.push(tok); hrun({ type: 'push' }); }
+function ovPop(toks) {
+  let n = 0;
+  [].concat(toks).forEach(t => { const i = ovHist.lastIndexOf(t); if (i >= 0) { ovHist.splice(i, 1); n++; } });
+  if (n) hrun({ type: 'back', n });
+}
+addEventListener('popstate', e => {
+  if (hq.busy) { hq.busy = false; clearTimeout(hq.timer); hdrain(); return; }   // result of our own history.go()
+  const tok = ovHist.pop();
+  if (tok === undefined) { if (e.state && e.state.om) hrun({ type: 'back', n: 1 }); return; }   // stale forward entry: bounce back
+  if (tok === PLAYER) {
+    if (P.locked) { flashUnlock(); ovPush(PLAYER); return; }                 // locked: Back does not leave the player
+    closePlayer({ fromPop: true });
+  } else closeSheet(tok, { fromPop: true });
+});
+
+/* ---- Modal isolation: inert everything underneath the topmost dialog ---- */
+function updateInert() {
+  const ps = sheetStack.some(inPlayer), ls = sheetStack.some(s => !inPlayer(s));
+  const playerModal = !!P.video && !P.pip;
+  $('#app').inert = playerModal || ls;
+  $('#app-sheets').inert = playerModal;
+  player.inert = !!playerClosing || (!playerModal && ls);
+  [...stage.children].forEach(c => { c.inert = ps && c.id !== 'player-sheets'; });
+}
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]';
+function focusables(root) {
+  return $$(FOCUSABLE, root).filter(el => el.tabIndex >= 0 && !el.closest('[inert], [hidden]') &&
+    (el.checkVisibility ? el.checkVisibility({ visibilityProperty: true }) : el.getClientRects().length > 0));
+}
+const activeDialog = () => topSheet() || (P.video && !P.pip ? player : null);
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Tab' || menuOpen) return;
+  const dlg = activeDialog(); if (!dlg) return;
+  const f = focusables(dlg), a = document.activeElement;
+  if (!f.length) { e.preventDefault(); dlg.focus({ preventScroll: true }); return; }
+  const first = f[0], last = f[f.length - 1];
+  if (!dlg.contains(a) || a === dlg) { e.preventDefault(); (e.shiftKey ? last : first).focus({ preventScroll: true }); }
+  else if (e.shiftKey && a === first) { e.preventDefault(); last.focus({ preventScroll: true }); }
+  else if (!e.shiftKey && a === last) { e.preventDefault(); first.focus({ preventScroll: true }); }
+});
+function inPlayer(el) { return !!el.closest('#stage'); }
+function mapDelta(el, dx, dy) { return inPlayer(el) && P.rot ? { x: dy, y: -dx } : { x: dx, y: dy }; }
+
+function openSheet(id, trigger) {
+  const sh = sheetOf(id); const layer = sh.closest('.sheet-layer');
+  const instant = noMotion();
+  // only one sheet per layer
+  sheetStack.filter(s => s.closest('.sheet-layer') === layer && s !== sh).forEach(s => closeSheet(s, { instant: true, keepLayer: true, noFocus: true }));
+  layer.classList.add('active');
+  const scrim = layer.querySelector('.scrim');
+  [sh, scrim].forEach(el => el.classList.toggle('instant', instant));
+  sh.style.transform = '';
+  void sh.offsetWidth;
+  sh.classList.add('open'); scrim.classList.add('on');
+  if (instant) requestAnimationFrame(() => [sh, scrim].forEach(el => el.classList.remove('instant')));
+  if (!sheetStack.includes(sh)) sheetStack.push(sh);
+  ovPush(sh);
+  sh._trigger = trigger || document.activeElement;
+  if (inPlayer(sh)) { hideControls(); }
+  updateInert();
+  sh.dispatchEvent(new CustomEvent('sheetopen'));      // render dynamic content first, then focus
+  cancelAnimationFrame(sh._focusRaf);
+  sh._focusRaf = requestAnimationFrame(() => {
+    if (!sh.classList.contains('open')) return;
+    const f = sh.querySelector('[data-autofocus]') || sh.querySelector('.sheet-body [aria-checked="true"], .sheet-body button, .sheet-body input') || sh;
+    f.focus({ preventScroll: true });
+    if (f.hasAttribute('data-autofocus') && f.select) f.select();
+  });
+}
+function closeSheet(sh, opts = {}) {
+  if (typeof sh === 'string') sh = sheetOf(sh);
+  if (!sh || !sh.classList.contains('open')) return;
+  const layer = sh.closest('.sheet-layer'); const scrim = layer.querySelector('.scrim');
+  const instant = opts.instant || noMotion();
+  [sh, scrim].forEach(el => el.classList.toggle('instant', instant));
+  sh.classList.remove('open', 'dragging'); sh.style.transform = '';
+  if (!opts.keepLayer) scrim.classList.remove('on');
+  cancelAnimationFrame(sh._focusRaf);
+  sheetStack.splice(sheetStack.indexOf(sh), 1);
+  if (!opts.noHist) ovPop(sh);       // no-op when Back already consumed this entry
+  updateInert();
+  const done = () => {
+    [sh, scrim].forEach(el => el.classList.remove('instant'));
+    if (!layer.querySelector('.sheet.open')) layer.classList.remove('active');
+  };
+  instant ? requestAnimationFrame(done) : setTimeout(done, 250);
+  if (!opts.noFocus && sh._trigger && document.contains(sh._trigger)) sh._trigger.focus({ preventScroll: true });
+  if (inPlayer(sh) && !opts.keepLayer && P.video && !P.locked) bumpControls();
+  sh.dispatchEvent(new CustomEvent('sheetclose'));
+}
+const topSheet = () => sheetStack[sheetStack.length - 1];
+document.addEventListener('click', e => {
+  const c = e.target.closest('[data-close-sheet]'); if (!c) return;
+  const layer = c.closest('.sheet-layer');
+  const sh = c.closest('.sheet') || layer.querySelector('.sheet.open');
+  sh && closeSheet(sh);
+});
+function bindSheetDrag(sh) {
+  const grab = sh.querySelector('.sheet-grab'); let d = null;
+  const damp = v => v >= 0 ? v : -(1 - Math.exp(v / 90)) * 28;   // friction when dragging up
+  grab.addEventListener('pointerdown', e => {
+    if (d || e.button > 0 || e.target.closest('button, input')) return;   // ignore extra fingers
+    d = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), dy: 0, s: [{ t: performance.now(), y: 0 }] };
+    capture(grab, e.pointerId);
+    sh.classList.add('dragging');
+  });
+  grab.addEventListener('pointermove', e => {
+    if (!d || e.pointerId !== d.id) return;
+    d.dy = damp(mapDelta(sh, e.clientX - d.x, e.clientY - d.y).y);
+    const now = performance.now(); d.s.push({ t: now, y: d.dy });
+    while (d.s.length > 2 && now - d.s[0].t > 100) d.s.shift();
+    sh.style.transform = `translateY(${d.dy}px)`;
+  });
+  const end = (e, cancelled) => {
+    if (!d || e.pointerId !== d.id) return;
+    // velocity from the last ~100ms of movement only (a pause before release means no fling)
+    const now = performance.now(), recent = d.s.filter(p => now - p.t <= 100), dy = d.dy;
+    const vel = recent.length > 1 && recent[recent.length - 1].t > recent[0].t ? (recent[recent.length - 1].y - recent[0].y) / (recent[recent.length - 1].t - recent[0].t) : 0;
+    d = null;
+    sh.classList.remove('dragging');
+    if (!cancelled && dy > 0 && (vel > 0.11 || dy > sh.offsetHeight * 0.35)) closeSheet(sh);
+    else sh.style.transform = '';          // pointercancel and short drags snap back
+  };
+  grab.addEventListener('pointerup', e => end(e, false));
+  grab.addEventListener('pointercancel', e => end(e, true));
+}
+$$('.sheet').forEach(sh => { sh.tabIndex = -1; bindSheetDrag(sh); });
+
+/* =========================================================
+   Segmented controls and switches (bound to state paths)
+   ========================================================= */
+function syncSeg(seg) {
+  const btns = $$('button', seg), val = getPath(seg.dataset.seg);
+  const idx = Math.max(0, btns.findIndex(b => b.dataset.v === String(val)));
+  seg.style.setProperty('--n', btns.length); seg.style.setProperty('--idx', idx);
+  btns.forEach((b, i) => { b.setAttribute('aria-checked', i === idx); b.tabIndex = i === idx ? 0 : -1; });
+}
+function syncSwitch(el) { el.setAttribute('aria-checked', !!getPath(el.dataset.switch)); }
+const syncAll = path => {
+  $$(`[data-seg="${path}"]`).forEach(syncSeg);
+  $$(`[data-switch="${path}"]`).forEach(syncSwitch);
+};
+document.addEventListener('click', e => {
+  const sb = e.target.closest('.seg[data-seg] button');
+  if (sb) { const seg = sb.parentElement; setPath(seg.dataset.seg, sb.dataset.v); syncAll(seg.dataset.seg); onSet(seg.dataset.seg); return; }
+  const sw = e.target.closest('[data-switch]');
+  if (sw) { const p = sw.dataset.switch; setPath(p, !getPath(p)); syncAll(p); onSet(p); }
+});
+// Arrow keys inside any radiogroup
+document.addEventListener('keydown', e => {
+  if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+  const g = e.target.closest && e.target.closest('[role="radiogroup"]'); if (!g || e.target.type === 'range') return;
+  const items = $$('[role="radio"]', g); const i = items.indexOf(e.target); if (i < 0) return;
+  e.preventDefault(); e.stopPropagation();
+  const n = items[(i + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length];
+  n.focus(); n.click();
+}, true);
+
+const DEC_DESC = { 'HW': 'Hardware decoder. Lowest battery use.', 'HW+': 'Hardware with software fallback. Recommended.', 'SW': 'Software decoder. Widest format support, more battery.' };
+function onSet(path) {
+  if (path === 'theme') applyTheme();
+  else if (path === 'decoder') { $('#dec-desc').textContent = DEC_DESC[S.decoder]; if (P.video) updatePlayerMeta(); }
+  else if (path.startsWith('p.subs')) applySubStyle();
+  else if (path === 'subDef.size') { P.subs.size = S.subDef.size; syncAll('p.subs.size'); applySubStyle(); }
+  else if (path === 'bgPlay') say(S.bgPlay ? 'Background play on' : 'Background play off');
+  else if (path === 'p.eq.on') renderEq();
+}
+
+/* =========================================================
+   Router
+   ========================================================= */
+const TABS = ['videos', 'music', 'network', 'settings'];
+function parseHash() {
+  const [name, id] = location.hash.replace(/^#\/?/, '').split('/');
+  if (name === 'folder' && id) return { name, id: decodeURIComponent(id) };
+  return { name: TABS.includes(name) ? name : 'videos', id: null };
+}
+function go(name, id) {
+  const h = id ? `#/${name}/${encodeURIComponent(id)}` : `#/${name}`;
+  if (location.hash === h) return;
+  location.hash = h;
+}
+let lastTab = 'videos';
+function route() {
+  const prev = S.route, next = parseHash();
+  if (next.name === 'folder' && next.id === 'privacy' && !S.privacyUnlocked) { history.replaceState(null, '', '#/settings'); return route(); }
+  closeMenu(false);
+  S.route = next;
+  const folder = $('#scr-folder');
+  if (next.name === 'folder') {
+    renderFolder(next.id, true);
+    if (prev.name !== 'folder') {
+      folder.hidden = false; folder.scrollTop = 0;
+      anim(folder, [{ transform: 'translateX(100%)' }, { transform: 'translateX(0)' }], 280, EASE_DRAWER);
+      setTimeout(() => $('#folder-back').focus({ preventScroll: true }), 0);
+    }
+    return;
+  }
+  if (prev.name === 'folder') {
+    if (prev.id === 'privacy') S.privacyUnlocked = false;
+    const a = anim(folder, [{ transform: 'translateX(0)' }, { transform: 'translateX(100%)' }], 200, EASE_OUT);
+    a ? a.finished.then(() => { if (S.route.name !== 'folder') folder.hidden = true; }) : (folder.hidden = true);
+    renderLibrary(false);
+    const back = $(`[data-folder="${CSS.escape(prev.id)}"]`); back && back.focus({ preventScroll: true });
+  }
+  if (next.name !== lastTab || prev.name === next.name && prev.name !== 'folder') showTab(next.name, prev.name !== 'folder');
+}
+function showTab(name, animate) {
+  const changed = name !== lastTab;
+  TABS.forEach(t => { $('#scr-' + t).hidden = t !== name; });
+  $$('.nav button').forEach(b => b.dataset.tab === name ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
+  lastTab = name;
+  if (changed && animate) anim($('#scr-' + name), [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], 180);
+  if (name === 'videos') renderLibrary(changed);
+  if (name === 'music') renderMusic(changed);
+  if (name === 'network') renderHistory(changed);
+  if (name === 'settings') renderSettings();
+}
+addEventListener('hashchange', route);
+$$('.nav button').forEach(b => b.addEventListener('click', () => {
+  if (b.dataset.tab === lastTab) { $('#scr-' + lastTab).scrollTo({ top: 0, behavior: noMotion() ? 'auto' : 'smooth' }); return; }
+  go(b.dataset.tab);
+}));
+$('#folder-back').addEventListener('click', () => go('videos'));
+$$('.screen').forEach(sc => sc.addEventListener('scroll', () => { const bar = $('.appbar', sc); bar && bar.classList.toggle('scrolled', sc.scrollTop > 4); }, { passive: true }));
+
+/* =========================================================
+   Library
+   ========================================================= */
+const visibleVideos = () => VIDEOS.filter(v => !S.hidden.has(v.id));
+const folderVideos = id => id === 'privacy' ? VIDEOS.filter(v => S.hidden.has(v.id)) : visibleVideos().filter(v => v.folder === id);
+const SORTS = { name: 'Name', date: 'Date added', size: 'Size', length: 'Length' };
+function sortVideos(list) {
+  const { key, dir } = S.sort;
+  const f = { name: v => v.title.toLowerCase(), date: v => -v.date, size: v => v.size, length: v => v.dur }[key];
+  return [...list].sort((a, b) => (f(a) > f(b) ? 1 : f(a) < f(b) ? -1 : 0) * dir);
+}
+function sortFolders() {
+  const { key, dir } = S.sort;
+  const stats = FOLDERS.map(f => { const vs = folderVideos(f.id); return { f, vs, size: vs.reduce((s, v) => s + v.size, 0), date: Math.max(0, ...vs.map(v => v.date)) }; });
+  const g = { name: x => x.f.name.toLowerCase(), date: x => -x.date, size: x => x.size, length: x => x.vs.length }[key];
+  return stats.sort((a, b) => (g(a) > g(b) ? 1 : g(a) < g(b) ? -1 : 0) * dir);
+}
+function thumbStyle(v) {
+  const h = v.hue;
+  return `background:radial-gradient(circle at 72% 30%, hsl(${(h + 40) % 360} 95% 78% / .95) 0 7%, transparent 8%),` +
+    `radial-gradient(120% 70% at 25% 115%, hsl(${(h + 200) % 360} 35% 14%) 55%, transparent 56%),` +
+    `radial-gradient(90% 60% at 85% 120%, hsl(${(h + 210) % 360} 30% 22%) 55%, transparent 56%),` +
+    `linear-gradient(170deg, hsl(${h} 60% 30%), hsl(${(h + 40) % 360} 70% 58%))`;
+}
+function videoItem(v, i) {
+  const prog = v.progress > 0.01 ? `<span class="prog"><i style="transform:scaleX(${v.progress.toFixed(3)})"></i></span>` : '';
+  const left = v.progress > 0.01 ? ` · ${fmt(v.dur * (1 - v.progress))} left` : '';
+  return `<li class="vitem" style="--i:${i}" data-id="${v.id}">
+    <button class="vmain pressable" data-play="${v.id}" aria-label="${esc(v.title)}, ${fmt(v.dur)}${v.isNew ? ', new' : ''}${v.progress > .01 ? ', ' + Math.round(v.progress * 100) + '% watched' : ''}">
+      <span class="thumb"><span class="art" style="${thumbStyle(v)}"></span><span class="chip-dur">${fmt(v.dur)}</span>${prog}</span>
+      <span class="vtext"><span class="vtitle">${v.isNew ? '<span class="newdot"></span>' : ''}${esc(v.title)}</span>
+      <span class="meta">${v.res} · ${fmtSize(v.size)}${left}${v.isNew ? ' · <span class="newtag">NEW</span>' : ''}</span></span>
+    </button>
+    <button class="icon-btn pressable vmore" data-more="${v.id}" aria-label="More options for ${esc(v.title)}" aria-haspopup="menu" aria-expanded="false">${ic('more')}</button>
+  </li>`;
+}
+function setStagger(el, on) { el.classList.toggle('stagger', on && !noMotion()); }
+function syncViewToggles() {
+  $$('.view-toggle').forEach(b => { b.innerHTML = ic(S.view === 'list' ? 'grid' : 'list'); b.setAttribute('aria-label', S.view === 'list' ? 'Switch to grid view' : 'Switch to list view'); });
+}
+function renderCW(stagger) {
+  const ae = document.activeElement;
+  const fid = ae && ae.closest && ae.closest('#cw-row') ? ae.dataset.play : null;
+  const cw = visibleVideos().filter(v => v.progress > 0.01 && v.progress < 0.97).sort((a, b) => b.last - a.last).slice(0, 8);
+  $('#cw-sec').hidden = !cw.length;
+  $('#cw-count').textContent = cw.length ? cw.length + ' in progress' : '';
+  const row = $('#cw-row'); setStagger(row, stagger);
+  row.innerHTML = cw.map((v, i) => `<li style="--i:${i}"><button class="cw-card pressable" data-play="${v.id}" aria-label="Resume ${esc(v.title)}, ${fmt(v.dur * (1 - v.progress))} left">
+      <span class="thumb"><span class="art" style="${thumbStyle(v)}"></span><span class="chip-dur">${fmt(v.dur * v.progress)}</span><span class="prog"><i style="transform:scaleX(${v.progress.toFixed(3)})"></i></span></span>
+      <span class="t">${esc(v.title)}</span><span class="meta">${fmt(v.dur * (1 - v.progress))} left</span></button></li>`).join('');
+  if (fid) { const nb = $(`#cw-row [data-play="${CSS.escape(fid)}"]`); nb && nb.focus({ preventScroll: true }); }   // keep focus across re-renders
+}
+function renderLibrary(stagger) {
+  syncViewToggles();
+  if (S.query) return renderResults(stagger);
+  $('#lib-home').hidden = false; $('#lib-results').hidden = true;
+  renderCW(stagger);
+  // Folders
+  const fs = sortFolders();
+  const el = $('#folders'); el.className = 'folders ' + S.view; setStagger(el, stagger);
+  const total = fs.reduce((s, x) => s + x.vs.length, 0);
+  $('#f-total').textContent = `${total} videos`;
+  el.innerHTML = fs.map((x, i) => {
+    const thumbs = x.vs.slice(0, 4).map(v => `<span style="${thumbStyle(v)}"></span>`).join('') + '<span></span>'.repeat(Math.max(0, 4 - x.vs.length));
+    const newCount = x.vs.filter(v => v.isNew).length;
+    return `<li style="--i:${i}"><button class="folder pressable" data-folder="${x.f.id}" aria-label="${esc(x.f.name)}, ${x.vs.length} videos${newCount ? ', ' + newCount + ' new' : ''}">
+      <span class="mosaic">${thumbs}<span class="fi">${ic(x.f.icon)}</span></span>
+      <span class="ftile">${ic(x.f.icon)}</span>
+      <span class="ftext"><span class="fname">${esc(x.f.name)}</span><span class="meta">${x.vs.length} videos · ${fmtSize(x.size)}${newCount ? ` · <span class="newtag">${newCount} NEW</span>` : ''}</span></span>
+      ${ic('chevron-right', 'i-sm chev')}</button></li>`;
+  }).join('');
+}
+function renderResults(stagger) {
+  $('#lib-home').hidden = true; $('#lib-results').hidden = false;
+  const q = S.query.toLowerCase();
+  const list = sortVideos(visibleVideos().filter(v => v.title.toLowerCase().includes(q) || FOLDERS.find(f => f.id === v.folder).name.toLowerCase().includes(q)));
+  const el = $('#results'); el.className = 'vlist ' + S.view; setStagger(el, stagger);
+  $('#res-count').textContent = `${list.length} ${list.length === 1 ? 'video' : 'videos'}`;
+  el.innerHTML = list.length ? list.map(videoItem).join('') : `<li class="empty">${ic('search')}<span>No videos match “${esc(S.query)}”</span></li>`;
+  el._list = list;
+}
+function renderFolder(id, stagger) {
+  const f = id === 'privacy' ? { name: 'Privacy folder', icon: 'shield' } : FOLDERS.find(x => x.id === id);
+  if (!f) return go('videos');
+  const list = sortVideos(folderVideos(id));
+  $('#folder-title').textContent = f.name;
+  $('#folder-sub').textContent = `${list.length} videos · ${fmtSize(list.reduce((s, v) => s + v.size, 0))} · ${SORTS[S.sort.key]}`;
+  syncViewToggles();
+  const el = $('#vlist'); el.className = 'vlist ' + S.view; setStagger(el, stagger);
+  el.innerHTML = list.length ? list.map(videoItem).join('') : `<li class="empty">${ic(id === 'privacy' ? 'shield' : 'folder')}<span>${id === 'privacy' ? 'Hidden videos appear here' : 'Nothing here yet'}</span></li>`;
+  el._list = list;
+}
+function rerenderCurrent(stagger) {
+  if (S.route.name === 'folder') renderFolder(S.route.id, stagger);
+  renderLibrary(stagger && S.route.name !== 'folder');
+}
+
+// Header actions
+function sortMenu(trigger) {
+  openMenu(trigger, [
+    { heading: 'Sort by' },
+    ...Object.entries(SORTS).map(([k, label]) => ({ label, icon: { name: 'type', date: 'history', size: 'download', length: 'film' }[k], checked: S.sort.key === k, run: () => { S.sort.key = k; rerenderCurrent(true); } })),
+    { sep: true },
+    { label: S.sort.dir === 1 ? 'Ascending' : 'Descending', icon: 'sort', run: () => { S.sort.dir *= -1; rerenderCurrent(true); toast(S.sort.dir === 1 ? 'Ascending' : 'Descending'); } },
+  ], 'Sort');
+}
+$('#sort-btn').addEventListener('click', e => sortMenu(e.currentTarget));
+$('#sort-btn-2').addEventListener('click', e => sortMenu(e.currentTarget));
+$$('.view-toggle').forEach(b => b.addEventListener('click', () => { S.view = S.view === 'list' ? 'grid' : 'list'; rerenderCurrent(true); }));
+function setSearch(on) {
+  $('#wm').hidden = on; $('#search-btn').hidden = on; $('#search-field').hidden = !on;
+  if (on) { const i = $('#search-input'); i.focus(); anim($('#search-field'), [{ opacity: 0, transform: 'translateX(12px)' }, { opacity: 1, transform: 'none' }], 200); }
+  else { S.query = ''; $('#search-input').value = ''; renderLibrary(false); $('#search-btn').focus({ preventScroll: true }); }
+}
+$('#search-btn').addEventListener('click', () => setSearch(true));
+$('#search-close').addEventListener('click', () => setSearch(false));
+let searchT = 0;
+$('#search-input').addEventListener('input', e => { clearTimeout(searchT); searchT = setTimeout(() => { S.query = e.target.value.trim(); renderLibrary(false); }, 120); });
+$('#search-input').addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); setSearch(false); } });
+
+// Delegated library clicks
+const listOf = el => (el.closest('ul') && el.closest('ul')._list) || null;
+document.addEventListener('click', e => {
+  const fb = e.target.closest('[data-folder]'); if (fb) { go('folder', fb.dataset.folder); return; }
+  const pb = e.target.closest('[data-play]');
+  if (pb) {
+    const v = byId(pb.dataset.play); const list = listOf(pb);
+    openPlayer(v, { queue: list || sortVideos(folderVideos(v.folder)), from: pb });
+    return;
+  }
+  const mb = e.target.closest('[data-more]'); if (mb) videoMenu(mb, byId(mb.dataset.more));
+});
+function videoMenu(trigger, v) {
+  const privacy = S.hidden.has(v.id);
+  openMenu(trigger, [
+    { label: 'Play', icon: 'play', run: () => openPlayer(v, { queue: listOf(trigger), from: trigger }) },
+    { label: 'Play as audio', icon: 'headphones', run: () => openPlayer(v, { audio: true, queue: listOf(trigger), from: trigger }) },
+    { label: 'Info', icon: 'info', run: t => showInfo(v, t) },
+    { label: 'Rename', icon: 'pencil', run: t => showRename(v, t) },
+    { label: 'Share', icon: 'share', run: () => toast(`Sharing “${v.title}”`) },
+    { sep: true },
+    privacy ? { label: 'Move back to ' + FOLDERS.find(f => f.id === v.folder).name, icon: 'eye', run: () => unhide(v) }
+            : { label: 'Hide to privacy folder', icon: 'eye-off', danger: true, run: () => hideVideo(v) },
+  ], 'Options for ' + v.title);
+}
+function removeItemAnimated(id, then) {
+  const li = $(`.vitem[data-id="${CSS.escape(id)}"]`);
+  const a = li && anim(li, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateX(-24px)' }], 180);
+  a ? a.finished.then(then) : then();
+}
+function hideVideo(v) {
+  removeItemAnimated(v.id, () => {
+    S.hidden.add(v.id); rerenderCurrent(false); renderSettings();
+    toast(S.pin ? 'Moved to privacy folder' : 'Moved to privacy folder. Add a PIN in Settings.', { action: 'Undo', onAction: () => { S.hidden.delete(v.id); rerenderCurrent(false); renderSettings(); } });
+  });
+}
+function unhide(v) { removeItemAnimated(v.id, () => { S.hidden.delete(v.id); rerenderCurrent(false); renderSettings(); toast('Moved back to ' + FOLDERS.find(f => f.id === v.folder).name); }); }
+function showInfo(v, trigger) {
+  const f = FOLDERS.find(x => x.id === v.folder) || { name: 'Music', path: 'Music' };
+  const rows = [['Name', v.title + '.mp4'], ['Folder', f.name], ['Path', `/storage/emulated/0/${f.path}/`], ['Duration', fmt(v.dur)], ['Resolution', v.res === '4K' ? '3840 × 2160' : v.res === '1080p' ? '1920 × 1080' : v.res === '720p' ? '1280 × 720' : '854 × 480'],
+    ['Size', fmtSize(v.size)], ['Video', 'H.264 · 30 fps'], ['Audio', 'AAC · 48 kHz · Stereo'], ['Modified', new Date(v.date).toLocaleDateString(undefined, { dateStyle: 'medium' })], ['Watched', Math.round(v.progress * 100) + '%']];
+  $('#info-h').textContent = v.title;
+  $('#info-kv').innerHTML = rows.map(([k, val]) => `<dt>${k}</dt><dd>${esc(val)}</dd>`).join('');
+  openSheet('info', trigger);
+}
+let renaming = null;
+function showRename(v, trigger) {
+  renaming = v; const i = $('#ren-input'); i.value = v.title; i.removeAttribute('aria-invalid'); $('#ren-help').textContent = 'Extension stays .mp4'; $('#ren-help').classList.remove('err');
+  openSheet('rename', trigger);               // focuses and selects the [data-autofocus] input
+}
+$('#ren-form').addEventListener('submit', e => {
+  e.preventDefault(); const i = $('#ren-input'); const name = i.value.trim();
+  if (!name || /[\\/:*?"<>|]/.test(name)) { i.setAttribute('aria-invalid', 'true'); $('#ren-help').textContent = name ? 'Names cannot contain \\ / : * ? " < > |' : 'Enter a name'; $('#ren-help').classList.add('err'); return; }
+  renaming.title = name; closeSheet('rename'); rerenderCurrent(false); toast('Renamed');
+});
+
+/* Music */
+function renderMusic(stagger) {
+  const el = $('#music-list'); setStagger(el, stagger);
+  el.innerHTML = MUSIC.map((m, i) => `<li style="--i:${i}"><button class="row pressable" data-audio="${m.id}" aria-label="Play ${esc(m.title)}, ${fmt(m.dur)}">
+    <span class="ftile" style="${thumbStyle(m)};color:var(--on-video)">${ic('music', 'i-sm')}</span>
+    <span class="lbl"><span class="fname">${esc(m.title)}</span><span class="sub">${fmt(m.dur)} · ${fmtSize(m.size)}</span></span>${ic('play', 'i-sm chev')}</button></li>`).join('');
+}
+$('#music-list').addEventListener('click', e => { const b = e.target.closest('[data-audio]'); if (b) openPlayer(byId(b.dataset.audio), { audio: true, queue: MUSIC, from: b }); });
+
+/* Network */
+function renderHistory(stagger) {
+  const el = $('#hist'); setStagger(el, stagger);
+  $('#hist-clear').hidden = !S.history.length;
+  el.innerHTML = S.history.length ? S.history.map((h, i) => `<li style="--i:${i}"><button class="row pressable" data-hist="${i}" aria-label="Play ${esc(h.url)}">${ic('history')}
+      <span class="lbl"><span class="url">${esc(h.url)}</span><span class="sub">${ago(h.t)}</span></span></button>
+      <button class="icon-btn pressable" data-hist-rm="${i}" aria-label="Remove from history">${ic('x', 'i-sm')}</button></li>`).join('')
+    : `<li class="empty">${ic('globe')}<span>Streams you play show up here</span></li>`;
+}
+function playUrl(url) {
+  let u; try { u = new URL(url); } catch { u = null; }
+  const input = $('#net-url'), help = $('#net-help');
+  if (!u || !['http:', 'https:', 'rtsp:', 'rtmp:', 'mms:'].includes(u.protocol)) {
+    input.setAttribute('aria-invalid', 'true'); help.textContent = 'Enter a full URL starting with http://, https://, rtsp:// or rtmp://'; help.classList.add('err'); input.focus(); return;
+  }
+  input.removeAttribute('aria-invalid'); help.textContent = 'HTTP, HLS (.m3u8), DASH (.mpd), RTSP and RTMP'; help.classList.remove('err');
+  S.history = [{ url: u.href, t: Date.now() }, ...S.history.filter(h => h.url !== u.href)].slice(0, 12);
+  renderHistory(false);
+  const name = decodeURIComponent(u.pathname.split('/').filter(Boolean).pop() || u.hostname);
+  const v = { id: 'net-' + S.netItems.length, folder: 'network', title: name, host: u.host, dur: 1800, res: 'Stream', size: 0, hue: [...u.href].reduce((s, c) => s + c.charCodeAt(0), 0) % 360, progress: 0, last: 0, isNew: false, date: Date.now() };
+  S.netItems.push(v);
+  openPlayer(v, { queue: [v] });
+}
+$('#net-form').addEventListener('submit', e => { e.preventDefault(); playUrl($('#net-url').value.trim()); });
+$('#net-url').addEventListener('input', e => { if (e.target.getAttribute('aria-invalid')) { e.target.removeAttribute('aria-invalid'); $('#net-help').classList.remove('err'); $('#net-help').textContent = 'HTTP, HLS (.m3u8), DASH (.mpd), RTSP and RTMP'; } });
+$('#net-paste').addEventListener('click', async () => {
+  try { const t = await navigator.clipboard.readText(); if (t) { $('#net-url').value = t.trim(); $('#net-url').focus(); return; } } catch {}
+  toast('Clipboard is empty or not available');
+});
+$('#hist').addEventListener('click', e => {
+  const rm = e.target.closest('[data-hist-rm]');
+  if (rm) { const i = +rm.dataset.histRm; const li = rm.closest('li'); const go2 = () => { S.history.splice(i, 1); renderHistory(false); const nb = $('#hist button'); (nb || $('#net-url')).focus({ preventScroll: true }); };
+    const a = anim(li, [{ opacity: 1 }, { opacity: 0, transform: 'translateX(-16px)' }], 160); a ? a.finished.then(go2) : go2(); return; }
+  const b = e.target.closest('[data-hist]'); if (b) { const url = S.history[+b.dataset.hist].url; $('#net-url').value = url; playUrl(url); }
+});
+$('#hist-clear').addEventListener('click', () => { const old = S.history; S.history = []; renderHistory(false); toast('History cleared', { action: 'Undo', onAction: () => { S.history = old; renderHistory(false); } }); });
+
+/* Settings */
+const LANGS = ['English', 'Español', 'Français', 'Deutsch', 'العربية', '日本語'];
+function renderSettings() {
+  $$('#scr-settings [data-seg]').forEach(syncSeg);
+  $$('#scr-settings [data-switch]').forEach(syncSwitch);
+  $('#dec-desc').textContent = DEC_DESC[S.decoder];
+  $('#lang-val').textContent = S.subDef.lang;
+  const n = S.hidden.size;
+  $('#priv-sub').textContent = `${n} hidden ${n === 1 ? 'video' : 'videos'}${S.pin ? ' · PIN protected' : ''}`;
+  $('#pin-switch').setAttribute('aria-checked', !!S.pin);
+  $('#pin-sub').textContent = S.pin ? 'PIN is set. Turn off to remove it.' : 'Ask for a 4-digit PIN to open';
+}
+$('#lang-row').addEventListener('click', e => {
+  $('#lang-opts').innerHTML = LANGS.map(l => `<button class="opt pressable" role="radio" aria-checked="${l === S.subDef.lang}" data-lang="${esc(l)}"><span class="lbl">${esc(l)}</span>${ic('check', 'ck')}</button>`).join('');
+  openSheet('lang', e.currentTarget);
+});
+$('#lang-opts').addEventListener('click', e => {
+  const b = e.target.closest('[data-lang]'); if (!b) return;
+  S.subDef.lang = b.dataset.lang; $$('#lang-opts .opt').forEach(o => o.setAttribute('aria-checked', o === b)); renderSettings();
+  setTimeout(() => closeSheet('lang'), noMotion() ? 0 : 160);
+});
+$('#priv-open').addEventListener('click', e => {
+  if (!S.pin) { S.privacyUnlocked = true; go('folder', 'privacy'); return; }
+  pinFlow('unlock', e.currentTarget);
+});
+$('#pin-switch').addEventListener('click', e => pinFlow(S.pin ? 'remove' : 'create', e.currentTarget));
+
+/* PIN keypad */
+const pin = { mode: 'unlock', entry: '', first: '', busy: false, timer: 0 };
+const pinBusy = on => { pin.busy = on; $('#keypad').setAttribute('aria-busy', on); };
+const pinLive = () => { $('#pin-live').textContent = `${pin.entry.length} of 4 digits entered`; };   // never the digits themselves
+$('#keypad').innerHTML = [1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button class="pressable" data-k="${n}" aria-label="${n}">${n}</button>`).join('') +
+  `<span class="blank"></span><button class="pressable" data-k="0" aria-label="0">0</button><button class="pressable" data-k="del" aria-label="Delete digit">${ic('backspace')}</button>`;
+function pinFlow(mode, trigger) {
+  clearTimeout(pin.timer); pinBusy(false);
+  pin.mode = mode; pin.entry = ''; pin.first = ''; $('#pin-live').textContent = '';
+  $('#pin-h').textContent = { create: 'Create a PIN', unlock: 'Enter PIN', remove: 'Enter PIN to remove' }[mode];
+  $('#pin-msg').textContent = mode === 'create' ? 'Choose 4 digits' : 'Privacy folder is locked';
+  drawPin(); openSheet('pin', trigger);
+}
+function drawPin() { $$('#pin-dots i').forEach((d, i) => d.classList.toggle('f', i < pin.entry.length)); }
+function pinFail(msg) {
+  $('#pin-msg').textContent = msg; pin.entry = ''; drawPin();
+  const d = $('#pin-dots'); d.classList.remove('shake'); void d.offsetWidth; if (!noMotion()) d.classList.add('shake');
+}
+function pinKey(k) {
+  if (pin.busy) return;                       // a completed entry is being checked
+  if (k === 'del') { pin.entry = pin.entry.slice(0, -1); drawPin(); pinLive(); return; }
+  if (pin.entry.length >= 4) return;
+  pin.entry += k; drawPin(); pinLive();
+  if (pin.entry.length < 4) return;
+  const e = pin.entry;                        // capture the completed value
+  pinBusy(true);
+  pin.timer = setTimeout(() => {
+    pinBusy(false);
+    if (pin.mode === 'create') {
+      if (!pin.first) { pin.first = e; pin.entry = ''; drawPin(); $('#pin-h').textContent = 'Confirm PIN'; $('#pin-msg').textContent = 'Enter the same 4 digits again'; return; }
+      if (e !== pin.first) { pin.first = ''; $('#pin-h').textContent = 'Create a PIN'; return pinFail('PINs did not match. Try again.'); }
+      S.pin = e; closeSheet('pin'); renderSettings(); toast('PIN set for privacy folder');
+    } else if (e !== S.pin) pinFail('Wrong PIN');
+    else if (pin.mode === 'unlock') { closeSheet('pin', { noFocus: true }); afterHist(() => { S.privacyUnlocked = true; go('folder', 'privacy'); }); }
+    else { S.pin = null; closeSheet('pin'); renderSettings(); toast('PIN removed'); }
+  }, 120);
+}
+sheetOf('pin').addEventListener('sheetclose', () => { clearTimeout(pin.timer); pinBusy(false); pin.entry = ''; pin.first = ''; drawPin(); });
+$('#keypad').addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (b) pinKey(b.dataset.k); });
+document.addEventListener('keydown', e => {
+  if (topSheet() !== sheetOf('pin')) return;
+  if (/^\d$/.test(e.key)) { e.preventDefault(); pinKey(e.key); } else if (e.key === 'Backspace') { e.preventDefault(); pinKey('del'); }
+});
+
+/* =========================================================
+   Player
+   ========================================================= */
+const player = $('#player'), stage = $('#stage'), canvas = $('#vcanvas'), ctx = canvas.getContext('2d');
+const pctx = $('#pcanvas').getContext('2d'), seekEl = $('#seek'), range = $('#p-range'), controls = $('#controls');
+const MODES = ['Fit', 'Fill', 'Crop', '100%'];
+const ZOOM_ORDER = ['100%', 'Fit', 'Fill', 'Crop'];
+const CHAPTERS = [.18, .41, .63, .82];
+const AUDIO_TRACKS = [
+  { label: 'English', sub: 'AAC · 5.1 · 384 kbps' }, { label: 'English, commentary', sub: 'AAC · Stereo · 128 kbps' },
+  { label: '日本語', sub: 'AAC · Stereo · 192 kbps' }, { label: 'Español', sub: 'AC3 · 5.1 · 448 kbps' },
+];
+const BASE_SUBS = [{ id: 'off', label: 'Off', sub: 'No subtitles' }, { id: 'en', label: 'English', sub: 'SRT · external file' }, { id: 'sdh', label: 'English SDH', sub: 'Embedded · for deaf and hard of hearing' }, { id: 'es', label: 'Español', sub: 'Embedded' }];
+const CUES = { en: ['Did you hear that?', 'Only the wind off the harbor.', 'Then why is the lighthouse dark?', 'Someone switched it off. On purpose.', 'We should go before the tide turns.', 'Not without the map.', 'The map was never the point.', 'Follow the lights.'],
+  es: ['¿Oíste eso?', 'Solo el viento del puerto.', '¿Y por qué está apagado el faro?', 'Alguien lo apagó. A propósito.', 'Deberíamos irnos antes de la marea.', 'No sin el mapa.', 'El mapa nunca fue lo importante.', 'Sigue las luces.'] };
+const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
+const SLEEPS = [['off', 'Off'], [15, '15 min'], [30, '30 min'], [60, '60 min'], ['end', 'End of video']];
+const EQ_BANDS = ['60', '230', '910', '3.6k', '14k'];
+const EQ_PRESETS = { Flat: [0, 0, 0, 0, 0], 'Bass boost': [7, 4, 0, -1, -2], Vocal: [-2, 0, 4, 3, 0], Rock: [5, 2, -2, 3, 5], Treble: [-1, 0, 1, 4, 7], Custom: null };
+const SWATCHES = [['white', 'White', '--on-video'], ['yellow', 'Yellow', '--warning'], ['cyan', 'Blue', '--accent'], ['green', 'Green', '--success']];
+let lastFocus = null, lastFocusSel = null, raf = 0, lastTs = 0, hideT = 0;
+let playerGen = 0, playerClosing = false, closeAnim = null, lastPipSave = 0;
+
+/* ---- Video scene (canvas) ---- */
+function tc(t) { const f = Math.floor((t % 1) * 24); return fmt(t).padStart(5, '0').replace(/^(\d):/, '0$1:') + ':' + String(f).padStart(2, '0'); }
+function drawScene(c, t, W, H, hue, small) {
+  const h = (hue + t * 0.5) % 360;
+  const g = c.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, `hsl(${h} 60% 18%)`); g.addColorStop(.55, `hsl(${(h + 35) % 360} 70% 46%)`); g.addColorStop(1, `hsl(${(h + 60) % 360} 80% 66%)`);
+  c.fillStyle = g; c.fillRect(0, 0, W, H);
+  // stars
+  c.fillStyle = 'hsl(0 0% 100% / .5)';
+  for (let i = 0; i < 24; i++) { const x = ((i * 137.5 + t * 4) % W), y = (i * 53) % (H * .4); c.globalAlpha = .3 + .3 * Math.sin(t * 2 + i); c.fillRect(x, y, 2 * W / 960, 2 * W / 960); }
+  c.globalAlpha = 1;
+  // sun
+  const sx = W * (0.12 + 0.76 * ((t * 0.008) % 1)), sy = H * (0.3 + 0.08 * Math.sin(t * 0.07)), sr = H * 0.09;
+  const rg = c.createRadialGradient(sx, sy, sr * .4, sx, sy, sr * 3.2);
+  rg.addColorStop(0, `hsl(${(h + 50) % 360} 100% 85% / .9)`); rg.addColorStop(1, `hsl(${(h + 50) % 360} 100% 70% / 0)`);
+  c.fillStyle = rg; c.fillRect(0, 0, W, H);
+  c.fillStyle = `hsl(${(h + 50) % 360} 100% 90%)`; c.beginPath(); c.arc(sx, sy, sr, 0, Math.PI * 2); c.fill();
+  // hills (parallax)
+  for (let k = 0; k < 3; k++) {
+    const base = H * (0.6 + k * 0.13), amp = H * (0.05 + k * 0.025), sp = (k + 1) * 22 * W / 960, fq = (0.006 + k * 0.004) * 960 / W;
+    c.beginPath(); c.moveTo(0, H);
+    for (let x = 0; x <= W; x += W / 96) c.lineTo(x, base + Math.sin((x + t * sp) * fq) * amp + Math.sin((x + t * sp * .6) * fq * 2.3) * amp * .4);
+    c.lineTo(W, H); c.closePath();
+    c.fillStyle = `hsl(${(h + 200 + k * 12) % 360} ${38 - k * 8}% ${20 - k * 6}%)`; c.fill();
+  }
+  if (small) return;
+  // running clock: analog + timecode
+  const cx = W - 70, cy = 70, r = 40;
+  c.lineWidth = 3; c.strokeStyle = 'hsl(0 0% 100% / .85)'; c.fillStyle = 'hsl(0 0% 0% / .25)';
+  c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.fill(); c.stroke();
+  const hand = (a, len, w) => { c.lineWidth = w; c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.sin(a) * len, cy - Math.cos(a) * len); c.stroke(); };
+  hand((t / 3600) * Math.PI * 2, r * .55, 4); hand((t % 3600 / 3600) * Math.PI * 2 * 1, r * .75, 3);
+  c.strokeStyle = 'hsl(350 90% 65%)'; hand((t % 60) / 60 * Math.PI * 2, r * .85, 2);
+  c.font = '600 26px "JetBrains Mono", ui-monospace, monospace'; c.fillStyle = 'hsl(0 0% 100% / .9)';
+  c.fillStyle = 'hsl(350 90% 60%)'; c.beginPath(); c.arc(34, H - 40, 7, 0, Math.PI * 2); c.globalAlpha = (Math.floor(t * 2) % 2) ? 1 : .35; c.fill(); c.globalAlpha = 1;
+  c.fillStyle = 'hsl(0 0% 100% / .9)'; c.fillText(tc(t), 52, H - 31);
+}
+
+/* ---- Layout / rotation / zoom ---- */
+function layoutStage() {
+  const W = innerWidth, H = innerHeight;
+  P.rot = !P.pip && P.landscape && H > W;
+  const sw = P.pip ? 208 : P.rot ? H : W, sh = P.pip ? 117 : P.rot ? W : H;
+  stage.style.setProperty('--sw', sw + 'px'); stage.style.setProperty('--sh', sh + 'px');
+  stage.style.setProperty('--rot', P.rot ? '90deg' : '0deg'); stage.classList.toggle('rot', P.rot);
+  let fw = sw, fh = sw * 9 / 16; if (fh > sh) { fh = sh; fw = sh * 16 / 9; }
+  canvas.style.width = fw + 'px'; canvas.style.height = fh + 'px';
+  P.fit = { fw, fh, sw, sh };
+  applyZoom(true);
+  $('#p-rotate').setAttribute('aria-label', P.landscape ? 'Rotate to portrait' : 'Rotate to landscape');
+}
+function modeScale(mode) {
+  const { fw, fh, sw, sh } = P.fit;
+  if (mode === 'Fill') return [sw / fw, sh / fh];
+  if (mode === 'Crop') { const s = Math.max(sw / fw, sh / fh); return [s, s]; }
+  if (mode === '100%') { const s = 640 / fw; return [s, s]; }
+  return [1, 1];
+}
+function applyZoom(live) {
+  const [x, y] = modeScale(P.mode);
+  canvas.classList.toggle('live', !!live || noMotion());
+  canvas.style.transform = `scale(${x * P.zoom}, ${y * P.zoom})`;
+  $('#p-aspect').setAttribute('aria-label', 'Aspect ratio: ' + P.mode);
+}
+function setMode(m) { P.mode = m; P.zoom = 1; applyZoom(false); vtoast(m); }
+addEventListener('resize', () => { if (P.video) layoutStage(); });
+
+/* ---- Open / close ---- */
+function resumeT(v) { return S.resume && v.progress > 0.01 && v.progress < 0.97 ? v.progress * v.dur : 0; }
+// Stable focus target: remember *which item* opened the player so focus survives list re-renders.
+function focusSel(el) {
+  if (!el || !el.closest) return null;
+  for (const a of ['play', 'more', 'audio', 'hist']) {
+    const b = el.closest(`[data-${a}]`);
+    if (b) { const sc = b.closest('#cw-row, #vlist, #results, #music-list, #hist'); return (sc ? '#' + sc.id + ' ' : '') + `[data-${a}="${CSS.escape(b.dataset[a])}"]`; }
+  }
+  return null;
+}
+function restoreFocus() {
+  const byId = lastFocusSel && $(lastFocusSel);
+  const t = byId && !byId.closest('[hidden]') ? byId : lastFocus && document.contains(lastFocus) ? lastFocus : $('.nav [aria-current]');
+  t && t.focus({ preventScroll: true });
+}
+function openPlayer(v, opts = {}) {
+  if (!v) return;
+  playerGen++;                                              // invalidate any pending close callback
+  if (closeAnim) { closeAnim.cancel(); closeAnim = null; }
+  playerClosing = false;
+  const wasOpen = !!P.video;
+  if (P.video) saveProgress();
+  lastFocus = opts.from || document.activeElement; lastFocusSel = focusSel(lastFocus);
+  toastEl.classList.remove('show');
+  P.queue = (opts.queue && opts.queue.length ? opts.queue : [v]);
+  loadVideo(v, opts);
+  if (P.pip) exitPip();
+  P.locked = false; stage.classList.remove('locked');
+  P.video = v;
+  player.classList.add('open'); ovPush(PLAYER); updateInert();
+  layoutStage();
+  if (!wasOpen) {
+    anim($('#vwrap'), [{ opacity: 0, transform: 'scale(.96)' }, { opacity: 1, transform: 'none' }], 240);
+    lastTs = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
+  }
+  setPlaying(true);
+  bumpControls();
+  setTimeout(() => $('#p-play').focus({ preventScroll: true }), 0);
+}
+function loadVideo(v, opts = {}) {
+  P.video = v; P.t = opts.t != null ? opts.t : resumeT(v); P.ab = { a: null, b: null }; P.audioOnly = !!opts.audio;
+  P.mode = 'Fit'; P.zoom = 1; P.subTracks = BASE_SUBS.slice(); P.sub = S.subDef.lang === 'Español' ? 'es' : 'en'; P.subs.size = S.subDef.size;
+  $('#sub-found').innerHTML = ''; $('#sub-search span').textContent = 'Search online';
+  if (v.isNew) v.isNew = false;
+  player.classList.toggle('audio', P.audioOnly);
+  $('#aart-title').textContent = v.title;
+  $('#p-title').textContent = v.title;
+  updatePlayerMeta();
+  range.max = Math.max(1, Math.round(v.dur)); $('#p-dur').textContent = fmt(v.dur);
+  $('#p-ticks').innerHTML = v.dur > 120 ? CHAPTERS.map(f => `<i style="left:${f * 100}%"></i>`).join('') : '';
+  renderAB(); syncAll('p.subs.size'); applySubStyle(); lastSec = -1;
+  const i = P.queue.indexOf(v);
+  $('#p-prev').disabled = i <= 0; $('#p-next').disabled = i < 0 || i >= P.queue.length - 1;
+  $('#p-prev').style.opacity = i <= 0 ? .4 : ''; $('#p-next').style.opacity = i < 0 || i >= P.queue.length - 1 ? .4 : '';
+}
+function updatePlayerMeta() {
+  const v = P.video; const f = FOLDERS.find(x => x.id === v.folder);
+  $('#p-sub').textContent = [f ? f.name : v.host || 'Music', v.res, S.decoder + ' decoder', P.audioOnly ? 'Audio only' : ''].filter(Boolean).join(' · ');
+}
+function saveProgress() {
+  const v = P.video; if (!v) return;
+  v.progress = P.t >= v.dur - 1 ? 0 : P.t / v.dur; v.last = Date.now();
+}
+function closePlayer(opts = {}) {
+  if (!P.video) return;
+  saveProgress();
+  const inSheets = sheetStack.filter(inPlayer);
+  inSheets.forEach(s => closeSheet(s, { instant: true, noFocus: true, noHist: true }));
+  ovPop([...inSheets, PLAYER]);                               // one history step for everything the player owned (no-op if Back already did)
+  resetGestures();
+  P.sleepEnd = 0; P.sleep = 'off'; renderSleep();             // sleep timer never outlives the player
+  clearTimeout(hideT); clearTimeout(unlockT); $('#p-unlock').classList.remove('show');
+  const gen = ++playerGen;
+  let done = false;
+  const finish = () => {
+    if (done || gen !== playerGen) return;                    // already finished, or a newer open/close superseded this one
+    done = true;
+    closeAnim = null; playerClosing = false;
+    player.classList.remove('open', 'pip', 'audio'); P.pip = false;
+    cancelAnimationFrame(raf); P.playing = false; P.held = false;
+    updateInert();
+    rerenderCurrent(false);
+    restoreFocus();
+  };
+  P.video = null; playerClosing = true; updateInert();
+  const a = anim(stage, [{ opacity: 1 }, { opacity: 0 }], 160);
+  closeAnim = a;
+  if (!a) return finish();
+  a.finished.then(finish, () => {});
+}
+
+/* ---- Playback loop ---- */
+let lastSec = -1;
+function loop(ts) {
+  raf = requestAnimationFrame(loop);
+  const v = P.video; if (!v) return;
+  const dt = lastTs ? Math.min(0.1, (ts - lastTs) / 1000) : 0; lastTs = ts;
+  if (P.playing && !P.scrubbing) {
+    P.t += dt * (P.held ? 2 : P.rate);
+    if (P.ab.a != null && P.ab.b != null && P.t >= P.ab.b) P.t = P.ab.a;
+    if (P.t >= v.dur) { P.t = v.dur; setPlaying(false); showControls(); if (P.sleep === 'end') { P.sleep = 'off'; renderSleep(); vtoast('Sleep timer: stopped at end', 1600); } }
+  }
+  if (P.sleepEnd && Date.now() >= P.sleepEnd) { P.sleepEnd = 0; P.sleep = 'off'; setPlaying(false); renderSleep(); vtoast('Sleep timer ended'); showControls(); }
+  if (P.pip && P.playing && ts - lastPipSave > 5000) { lastPipSave = ts; saveProgress(); if (!S.query && S.route.name !== 'folder') renderCW(false); }
+  drawScene(ctx, P.t, canvas.width, canvas.height, v.hue, false);
+  updateTimeUI();
+  updateSub();
+}
+function updateTimeUI() {
+  const d = P.video.dur, t = P.t;
+  seekEl.style.setProperty('--p', (t / d).toFixed(4));
+  seekEl.style.setProperty('--b', Math.min(1, (t + 90) / d).toFixed(4));
+  const s = Math.floor(t);
+  if (s !== lastSec) {
+    lastSec = s; $('#p-cur').textContent = fmt(t);
+    if (!P.scrubbing) range.value = s;
+    range.setAttribute('aria-valuetext', `${fmt(t)} of ${fmt(d)}`);
+    if (P.sleepEnd) $('#sleep-left').textContent = '· ' + fmt((P.sleepEnd - Date.now()) / 1000) + ' left';
+  }
+}
+function setPlaying(on) {
+  P.playing = on; player.classList.toggle('playing', on);
+  $('#p-play').innerHTML = ic(on ? 'pause' : 'play'); $('#p-play').setAttribute('aria-label', on ? 'Pause' : 'Play');
+  if (on && P.video && P.t >= P.video.dur) P.t = 0;
+  on ? bumpControls() : (clearTimeout(hideT), !P.locked && sheetStack.filter(inPlayer).length === 0 && P.video && !P.pip && showControls());
+}
+function seekTo(t) { P.t = clamp(t, 0, P.video.dur); lastSec = -1; }
+function seekBy(d) { seekTo(P.t + d); }
+
+/* ---- Controls visibility (auto-hide 3s) ---- */
+let uiOn = false;
+function showControls() { if (P.locked || P.pip) return; uiOn = true; controls.classList.toggle('instant', noMotion()); controls.classList.add('show'); stage.classList.add('ui-on'); }
+function hideControls() { uiOn = false; controls.classList.toggle('instant', noMotion()); controls.classList.remove('show'); stage.classList.remove('ui-on'); clearTimeout(hideT); }
+function bumpControls() {
+  showControls(); clearTimeout(hideT);
+  hideT = setTimeout(() => {
+    const kbdFocus = kbd && controls.contains(document.activeElement);   // keep visible while tabbing through
+    if (P.playing && !P.scrubbing && !G && !kbdFocus && !sheetStack.some(inPlayer)) hideControls();
+  }, 3000);
+}
+controls.addEventListener('pointerdown', () => bumpControls());
+controls.addEventListener('focusin', () => { if (!uiOn) showControls(); clearTimeout(hideT); });
+controls.addEventListener('focusout', () => bumpControls());
+
+/* ---- HUD, toasts, badge ---- */
+let hudT = 0, vtT = 0;
+function hud(kind, value, big, small) {
+  const el = $('#hud'); el.classList.toggle('seek', kind === 'seek');
+  const icon = kind === 'bright' ? 'sun' : kind === 'vol' ? (value === 0 ? 'volume-x' : 'volume') : (big.startsWith('-') ? 'rewind' : 'ff');
+  if (el._icon !== icon) { $('#hud-ic').innerHTML = ic(icon, 'i-sm'); el._icon = icon; }
+  if (kind !== 'seek') $('#hud-fill').style.transform = `scaleX(${value})`;
+  $('#hud-b').textContent = big; $('#hud-s').textContent = small || '';
+  el.classList.toggle('instant', noMotion()); el.classList.add('show'); clearTimeout(hudT);
+}
+function hudHide(delay = 600) { clearTimeout(hudT); hudT = setTimeout(() => $('#hud').classList.remove('show'), delay); }
+function vtoast(msg, ms = 900) {
+  const el = $('#vtoast'); el.textContent = msg; el.classList.toggle('instant', noMotion()); el.classList.add('show');
+  clearTimeout(vtT); vtT = setTimeout(() => el.classList.remove('show'), ms);
+}
+function showPreview(t) {
+  $('#preview').classList.add('show'); seekEl.style.setProperty('--pv', (t / P.video.dur).toFixed(4));
+  drawScene(pctx, t, 320, 180, P.video.hue, true); $('#prev-time').textContent = fmt(t);
+}
+function hidePreview() { $('#preview').classList.remove('show'); }
+
+/* ---- Subtitles ---- */
+function applySubStyle() {
+  [$('#subline'), $('#sub-prev')].forEach(el => { el.dataset.size = P.subs.size; el.dataset.color = P.subs.color; el.dataset.bg = P.subs.bg; });
+  $('#sync-v').textContent = (P.subs.offset > 0 ? '+' : '') + P.subs.offset + ' ms';
+  $$('#swatches .sw').forEach(s => s.setAttribute('aria-checked', s.dataset.c === P.subs.color));
+}
+let lastCue = '';
+function updateSub() {
+  let txt = '';
+  if (P.sub !== 'off' && !P.audioOnly) {
+    const tt = P.t + P.subs.offset / 1000; const slot = Math.floor(tt / 4);
+    if (tt >= 0 && tt % 4 < 3.2) { const tr = P.subTracks.find(x => x.id === P.sub); const lines = CUES[P.sub === 'es' || (tr && tr.lang === 'es') ? 'es' : 'en']; txt = lines[((slot % lines.length) + lines.length) % lines.length]; if (P.sub === 'sdh' && slot % 3 === 0) txt = '[waves crashing]\n' + txt; }
+  }
+  if (txt !== lastCue) { lastCue = txt; $('#subline').textContent = txt; }
+}
+
+/* ---- Gestures (pointer events) ---- */
+const gEl = $('#gesture');
+const pointers = new Map();
+let G = null, pinch = null, pinchDone = false, lpBadge = false;
+const TAP_WIN = 250, EDGE = 24;          // one tap/double-tap window; physical edge zones left to the system back gesture
+let tapUntil = 0, singleT = 0, seqT = 0, seqSide = null, seekAccum = 0;
+function toLocal(cx, cy) { const r = stage.getBoundingClientRect(); return P.rot ? { x: cy - r.top, y: r.right - cx } : { x: cx - r.left, y: cy - r.top }; }
+
+gEl.addEventListener('pointerdown', e => {
+  if (P.pip) return;
+  capture(gEl, e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 2) {
+    if (G) { clearTimeout(G.lp); if (G.mode === 'hold') endHold(); if (G.mode === 'seek') finishSeek(); G = null; $('#hud').classList.remove('show'); }
+    if (S.gestures.pinch && !P.locked) { const [a, b] = [...pointers.values()]; pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, z0: P.zoom }; }
+    return;
+  }
+  if (pointers.size > 2 || pinch) return;
+  pinchDone = false;
+  const edge = e.clientX < EDGE || e.clientX > innerWidth - EDGE;     // physical edge: taps only, no swipes
+  G = { id: e.pointerId, x0: e.clientX, y0: e.clientY, t0: performance.now(), local: toLocal(e.clientX, e.clientY), mode: null, startT: P.t, startV: P.vol, startB: P.bright, edge, moved: false };
+  if (!P.locked && S.gestures.longpress) G.lp = setTimeout(() => { if (G && !G.mode) { G.mode = 'hold'; P.held = true; lpBadge = true; $('#badge2x').classList.add('show'); } }, 450);
+});
+gEl.addEventListener('pointermove', e => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pinch && pointers.size >= 2) {
+    const [a, b] = [...pointers.values()]; const r = Math.hypot(a.x - b.x, a.y - b.y) / pinch.d0;
+    P.zoom = clamp(r, 0.6, 1.8); applyZoom(true); vtoast(Math.round(P.zoom * 100) + '%'); return;
+  }
+  if (!G || e.pointerId !== G.id || G.mode === 'hold' || P.locked) return;
+  if (G.edge) { if (!G.moved && Math.hypot(e.clientX - G.x0, e.clientY - G.y0) >= 12) { G.moved = true; clearTimeout(G.lp); } return; }
+  const d = P.rot ? { x: e.clientY - G.y0, y: -(e.clientX - G.x0) } : { x: e.clientX - G.x0, y: e.clientY - G.y0 };
+  const { sw, sh } = P.fit;
+  if (!G.mode) {
+    if (Math.hypot(d.x, d.y) < 12) return;
+    clearTimeout(G.lp);
+    if (Math.abs(d.x) > Math.abs(d.y)) G.mode = S.gestures.seek ? 'seek' : 'none';
+    else G.mode = G.local.x < sw / 2 ? (S.gestures.brightness ? 'bright' : 'none') : (S.gestures.volume ? 'vol' : 'none');
+    if (G.mode === 'seek') { P.scrubbing = true; showControls(); clearTimeout(hideT); seekEl.classList.add('drag'); }
+  }
+  if (G.mode === 'seek') {
+    const span = Math.min(P.video.dur, 300);
+    G.target = clamp(G.startT + d.x / sw * span, 0, P.video.dur);
+    const delta = G.target - G.startT;
+    P.t = G.target; lastSec = -1;
+    hud('seek', 0, (delta < 0 ? '-' : '+') + fmt(Math.abs(delta)), `${fmt(G.target)} / ${fmt(P.video.dur)}`);
+    showPreview(G.target);
+  } else if (G.mode === 'bright') {
+    P.bright = clamp(G.startB - d.y / (sh * 0.7), 0, 1);
+    $('#dim').style.opacity = ((1 - P.bright) * 0.75).toFixed(3);
+    hud('bright', P.bright, Math.round(P.bright * 100) + '%', 'Brightness');
+  } else if (G.mode === 'vol') {
+    P.vol = clamp(G.startV - d.y / (sh * 0.7), 0, 1);
+    hud('vol', P.vol, Math.round(P.vol * 100) + '%', P.vol === 0 ? 'Muted' : 'Volume');
+  }
+});
+function endHold() { P.held = false; lpBadge = false; $('#badge2x').classList.remove('show'); }
+function endPinch(z) {
+  const idx = ZOOM_ORDER.indexOf(P.mode);
+  let next = P.mode;
+  if (z > 1.12) next = ZOOM_ORDER[Math.min(ZOOM_ORDER.length - 1, idx + 1)];
+  else if (z < 0.89) next = ZOOM_ORDER[Math.max(0, idx - 1)];
+  setMode(next);
+}
+// Shared teardown for a seek-scrub (drag class, preview, HUD, auto-hide)
+function finishSeek() { P.scrubbing = false; seekEl.classList.remove('drag'); hidePreview(); hudHide(300); bumpControls(); }
+// Re-arm the auto-hide timer after a gesture, without popping controls that were hidden
+function gestureDone() { if (uiOn) bumpControls(); }
+function pointerEnd(e) {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.delete(e.pointerId);
+  if (pinch) { if (pointers.size < 2) { endPinch(P.zoom); pinch = null; pinchDone = true; gestureDone(); } return; }
+  if (pinchDone) { if (!pointers.size) pinchDone = false; return; }
+  if (!G || e.pointerId !== G.id) return;
+  clearTimeout(G.lp);
+  const g = G; G = null;
+  if (g.mode === 'hold') { endHold(); gestureDone(); }
+  else if (g.mode === 'seek') finishSeek();
+  else if (g.mode === 'bright' || g.mode === 'vol') { hudHide(); gestureDone(); }
+  else if (!g.mode && !g.moved && performance.now() - g.t0 < 350) onTap(g.local);
+}
+// pointercancel (system gesture, palm rejection...): restore the pre-gesture state instead of committing
+function pointerCancel(e) {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.delete(e.pointerId);
+  if (pinch) {
+    if (pointers.size < 2) { P.zoom = pinch.z0; applyZoom(false); clearTimeout(vtT); $('#vtoast').classList.remove('show'); pinch = null; pinchDone = true; gestureDone(); }
+    return;
+  }
+  if (pinchDone) { if (!pointers.size) pinchDone = false; return; }
+  if (!G || e.pointerId !== G.id) return;
+  clearTimeout(G.lp);
+  const g = G; G = null;
+  if (g.mode === 'hold') { endHold(); gestureDone(); }
+  else if (g.mode === 'seek') { P.t = g.startT; lastSec = -1; finishSeek(); }
+  else if (g.mode === 'bright') { P.bright = g.startB; $('#dim').style.opacity = ((1 - P.bright) * 0.75).toFixed(3); hudHide(0); gestureDone(); }
+  else if (g.mode === 'vol') { P.vol = g.startV; hudHide(0); gestureDone(); }
+}
+// Full teardown of every in-flight gesture (player close, PiP entry)
+function resetGestures() {
+  clearTimeout(singleT); clearTimeout(seqT); clearTimeout(wheelT); clearTimeout(hudT); clearTimeout(vtT);
+  if (G) clearTimeout(G.lp);
+  tapUntil = 0; seqSide = null; seekAccum = 0; wheelAcc = 0;
+  if (P.held || (G && G.mode === 'hold')) endHold();
+  if (pinch) { P.zoom = pinch.z0; applyZoom(false); }
+  if (P.scrubbing || rangeDrag) { rangeDrag = false; P.scrubbing = false; seekEl.classList.remove('drag'); hidePreview(); }
+  pointers.clear(); G = null; pinch = null; pinchDone = false;
+  $('#hud').classList.remove('show'); $('#vtoast').classList.remove('show');
+  ['l', 'r'].forEach(sd => { const r = $('#rip-' + sd); clearTimeout(r._t); r.classList.remove('show'); });
+}
+gEl.addEventListener('pointerup', pointerEnd);
+gEl.addEventListener('pointercancel', pointerCancel);
+gEl.addEventListener('click', () => { if (P.pip) exitPip(); });
+
+function onTap(local) {
+  if (P.locked) { flashUnlock(); return; }
+  if (!S.gestures.doubletap) { uiOn ? hideControls() : bumpControls(); return; }
+  const side = local.x < P.fit.sw / 2 ? 'l' : 'r', now = performance.now();
+  clearTimeout(singleT);
+  if (now < tapUntil) { doubleTap(side, local, now); return; }       // second tap inside the window: skip on the side of THIS tap
+  tapUntil = now + TAP_WIN;
+  singleT = setTimeout(() => { tapUntil = 0; uiOn ? hideControls() : bumpControls(); }, TAP_WIN);   // single tap only once the window closes
+}
+function doubleTap(side, local, now) {
+  const d = side === 'l' ? -10 : 10;
+  if (side !== seqSide) seekAccum = 0;                               // fresh run when the side changes or the window lapsed
+  seqSide = side; seekAccum += d; seekBy(d);
+  tapUntil = now + TAP_WIN;                                          // further taps in the window keep skipping
+  clearTimeout(seqT); seqT = setTimeout(() => { tapUntil = 0; seqSide = null; seekAccum = 0; gestureDone(); }, TAP_WIN);
+  const rip = $('#rip-' + side), rc = $('.rc', rip);
+  $('b', rip).textContent = Math.abs(seekAccum) + 's';
+  rip.classList.add('show'); clearTimeout(rip._t); rip._t = setTimeout(() => rip.classList.remove('show'), 650);
+  rc.style.left = (local.x - (side === 'l' ? 0 : P.fit.sw * .62)) + 'px'; rc.style.top = local.y + 'px';
+  anim(rc, [{ transform: 'scale(.3)', opacity: .9 }, { transform: 'scale(1.6)', opacity: 0 }], 340);
+}
+// Ctrl + wheel = pinch for mouse testing
+let wheelAcc = 0, wheelT = 0;
+stage.addEventListener('wheel', e => {
+  if (!e.ctrlKey || P.locked || P.pip || !S.gestures.pinch || sheetStack.some(inPlayer)) return;
+  e.preventDefault();
+  wheelAcc += -e.deltaY; P.zoom = clamp(1 + wheelAcc / 300, 0.6, 1.8); applyZoom(true); vtoast(Math.round(P.zoom * 100) + '%');
+  clearTimeout(wheelT); wheelT = setTimeout(() => { endPinch(P.zoom); wheelAcc = 0; gestureDone(); }, 220);
+}, { passive: false });
+
+/* ---- Lock ---- */
+let unlockT = 0;
+function flashUnlock() { const u = $('#p-unlock'); u.classList.add('show'); clearTimeout(unlockT); unlockT = setTimeout(() => u.classList.remove('show'), 2500); }
+$('#p-lock').addEventListener('click', () => {
+  P.locked = true; hideControls(); stage.classList.add('locked'); vtoast('Screen locked'); flashUnlock();
+  setTimeout(() => $('#p-unlock').focus({ preventScroll: true }), 0);
+});
+$('#p-unlock').addEventListener('click', () => {
+  P.locked = false; stage.classList.remove('locked'); $('#p-unlock').classList.remove('show'); vtoast('Unlocked'); bumpControls();
+  setTimeout(() => $('#p-lock').focus({ preventScroll: true }), 0);
+});
+
+/* ---- Seek bar (native range on top of custom visuals) ---- */
+let rangeDrag = false;
+let rangeStartT = 0;
+range.addEventListener('pointerdown', () => { rangeDrag = true; rangeStartT = P.t; P.scrubbing = true; seekEl.classList.add('drag'); clearTimeout(hideT); });
+range.addEventListener('input', () => {
+  P.t = +range.value; lastSec = -1;
+  $('#p-cur').textContent = fmt(P.t);
+  if (rangeDrag) showPreview(P.t); else bumpControls();
+});
+const rangeEnd = () => { if (!rangeDrag) return; rangeDrag = false; P.scrubbing = false; seekEl.classList.remove('drag'); hidePreview(); bumpControls(); };
+range.addEventListener('pointerup', rangeEnd); range.addEventListener('change', rangeEnd);
+range.addEventListener('pointercancel', () => { if (!rangeDrag) return; P.t = rangeStartT; lastSec = -1; range.value = Math.floor(P.t); rangeEnd(); });   // revert to where the drag began
+function renderAB() {
+  const { a, b } = P.ab, d = P.video.dur, el = $('#p-ab');
+  el.innerHTML = (a != null ? `<span class="ab-mark" style="left:${a / d * 100}%">A</span>` : '') + (b != null ? `<span class="ab-mark" style="left:${b / d * 100}%">B</span><span class="ab-range" style="left:${a / d * 100}%;width:${(b - a) / d * 100}%"></span>` : '');
+  $('#ab-state').textContent = a == null ? 'Tap to set A' : b == null ? `A at ${fmt(a)}. Tap to set B` : `Looping ${fmt(a)} to ${fmt(b)}`;
+  $('#t-ab').classList.toggle('on', a != null);
+}
+
+/* ---- Buttons ---- */
+$('#p-play').addEventListener('click', () => setPlaying(!P.playing));
+$('#p-back').addEventListener('click', () => closePlayer());
+$('#p-prev').addEventListener('click', () => step(-1));
+$('#p-next').addEventListener('click', () => step(1));
+function step(dir) {
+  const i = P.queue.indexOf(P.video), v = P.queue[i + dir]; if (!v) return;
+  saveProgress(); loadVideo(v, { audio: P.audioOnly }); setPlaying(true); vtoast(v.title.length > 28 ? v.title.slice(0, 27) + '…' : v.title);
+}
+$('#p-aspect').addEventListener('click', () => setMode(MODES[(MODES.indexOf(P.mode) + 1) % MODES.length]));
+$('#p-speed').addEventListener('click', e => openSheet('speed', e.currentTarget));
+$('#p-subs').addEventListener('click', e => openSheet('subs', e.currentTarget));
+$('#p-audio').addEventListener('click', e => openSheet('audio', e.currentTarget));
+$('#p-more').addEventListener('click', e => openSheet('more', e.currentTarget));
+$('#p-rotate').addEventListener('click', () => {
+  P.landscape = !P.landscape;
+  const a = anim(stage, [{ opacity: 1 }, { opacity: 0 }], 90);
+  const apply = () => { layoutStage(); anim(stage, [{ opacity: 0 }, { opacity: 1 }], 160); vtoast(P.landscape ? 'Landscape' : 'Portrait'); };
+  a ? a.finished.then(apply) : apply();
+});
+function enterPip() {
+  P.pip = true;
+  const inSheets = sheetStack.filter(inPlayer);
+  inSheets.forEach(s => closeSheet(s, { instant: true, noFocus: true, noHist: true }));
+  ovPop([...inSheets, PLAYER]);                               // PiP is not modal: Back must navigate the app again
+  resetGestures();
+  hideControls(); player.classList.add('pip'); updateInert(); layoutStage();
+  anim(player, [{ opacity: 0, transform: 'scale(.9)' }, { opacity: 1, transform: 'none' }], 220);
+  saveProgress(); lastPipSave = performance.now(); renderCW(false);
+  restoreFocus();
+}
+function exitPip() {
+  P.pip = false; player.classList.remove('pip'); ovPush(PLAYER); updateInert(); layoutStage();
+  anim(stage, [{ opacity: 0 }, { opacity: 1 }], 180); bumpControls(); $('#p-play').focus({ preventScroll: true });
+}
+$('#p-pip').addEventListener('click', enterPip);
+$('#pip-expand').addEventListener('click', exitPip);
+$('#pip-close').addEventListener('click', () => closePlayer());
+
+/* ---- Sheet contents ---- */
+function radioOpts(items, sel, key) {
+  return items.map((it, i) => { const id = it.id != null ? it.id : i; return `<button class="opt pressable" role="radio" aria-checked="${String(id) === String(sel)}" data-${key}="${id}"><span class="lbl"><span>${esc(it.label)}</span><span class="sub">${esc(it.sub)}</span></span>${ic('check', 'ck')}</button>`; }).join('');
+}
+sheetOf('audio').addEventListener('sheetopen', () => { $('#audio-opts').innerHTML = radioOpts(AUDIO_TRACKS, P.audio, 'au'); });
+$('#audio-opts').addEventListener('click', e => {
+  const b = e.target.closest('[data-au]'); if (!b) return;
+  P.audio = +b.dataset.au; $$('#audio-opts .opt').forEach(o => o.setAttribute('aria-checked', o === b));
+  vtoast(AUDIO_TRACKS[P.audio].label); setTimeout(() => closeSheet('audio'), noMotion() ? 0 : 180);
+});
+function renderSubOpts() { $('#sub-opts').innerHTML = radioOpts(P.subTracks, P.sub, 'st'); }
+sheetOf('subs').addEventListener('sheetopen', () => { renderSubOpts(); applySubStyle(); });
+$('#sub-opts').addEventListener('click', e => {
+  const b = e.target.closest('[data-st]'); if (!b) return;
+  P.sub = b.dataset.st; $$('#sub-opts .opt').forEach(o => o.setAttribute('aria-checked', o === b));
+});
+$('#swatches').innerHTML = SWATCHES.map(([id, label, v]) => `<button class="sw pressable" role="radio" data-c="${id}" aria-label="${label}"><span style="background:var(${v})"></span></button>`).join('');
+$('#swatches').addEventListener('click', e => { const b = e.target.closest('.sw'); if (!b) return; P.subs.color = b.dataset.c; applySubStyle(); });
+const syncStep = d => { P.subs.offset = d === 0 ? 0 : clamp(P.subs.offset + d, -5000, 5000); applySubStyle(); };
+$('#sync-minus').addEventListener('click', () => syncStep(-50));
+$('#sync-plus').addEventListener('click', () => syncStep(50));
+$('#sync-reset').addEventListener('click', () => syncStep(0));
+$('#sub-search').addEventListener('click', e => {
+  const btn = e.currentTarget; if (btn._busy) return; btn._busy = true;
+  btn.innerHTML = ic('loader', 'i-sm spin') + '<span>Searching…</span>';
+  const base = P.video.title.replace(/[^\w]+/g, '.').replace(/^\.|\.$/g, '');
+  setTimeout(() => {
+    btn._busy = false; btn.innerHTML = ic('search', 'i-sm') + '<span>Search again</span>';
+    const res = [[`${base}.en.srt`, '98% match · 1.2k downloads'], [`${base}.en.hi.srt`, '91% match · hearing impaired'], [`${base}.es.srt`, '87% match · Español']];
+    $('#sub-found').innerHTML = `<p class="meta" style="margin:var(--s-3) 0 var(--s-1)">${res.length} results online</p>` +
+      res.map(([n, m], i) => `<button class="opt pressable" data-dl="${i}"><span class="lbl"><span class="mono" style="font-size:var(--fs-sm);word-break:break-all">${esc(n)}</span><span class="sub">${m}</span></span>${ic('download', 'i-sm')}</button>`).join('');
+    $('#sub-found')._res = res;
+    setStagger($('#sub-found'), true);
+  }, 900);
+});
+$('#sub-found').addEventListener('click', e => {
+  const b = e.target.closest('[data-dl]'); if (!b) return;
+  const [name] = $('#sub-found')._res[+b.dataset.dl]; const id = 'dl' + b.dataset.dl;
+  if (!P.subTracks.find(t => t.id === id)) P.subTracks.push({ id, lang: name.includes('.es.') ? 'es' : 'en', label: name.includes('.es.') ? 'Español (online)' : name.includes('.hi.') ? 'English SDH (online)' : 'English (online)', sub: name });
+  P.sub = id; renderSubOpts();
+  b.remove(); say('Subtitle downloaded and selected');
+});
+// Speed
+function renderSpeed() {
+  const r = +P.rate.toFixed(2);
+  $('#sp-out').textContent = r + 'x'; $('#sp-range').value = r;
+  $('#p-speed').textContent = r + 'x'; $('#p-speed').setAttribute('aria-label', `Playback speed ${r}x`); $('#p-speed').classList.toggle('on', r !== 1);
+  $$('#sp-chips .chip').forEach(c => c.setAttribute('aria-checked', +c.dataset.sp === r));
+}
+$('#sp-chips').innerHTML = SPEEDS.map(s => `<button class="chip pressable" role="radio" data-sp="${s}">${s}x</button>`).join('');
+$('#sp-chips').addEventListener('click', e => { const c = e.target.closest('[data-sp]'); if (c) { P.rate = +c.dataset.sp; renderSpeed(); } });
+$('#sp-range').addEventListener('input', e => { P.rate = +e.target.value; renderSpeed(); });
+$('#sp-minus').addEventListener('click', () => { P.rate = clamp(Math.round((P.rate - 0.05) * 100) / 100, 0.25, 4); renderSpeed(); });
+$('#sp-plus').addEventListener('click', () => { P.rate = clamp(Math.round((P.rate + 0.05) * 100) / 100, 0.25, 4); renderSpeed(); });
+// More
+function renderSleep() {
+  $('#sleep-chips').innerHTML = SLEEPS.map(([v, l]) => `<button class="chip pressable" role="radio" aria-checked="${String(P.sleep) === String(v)}" data-sl="${v}">${l}</button>`).join('');
+  if (!P.sleepEnd) $('#sleep-left').textContent = P.sleep === 'end' ? '· at end' : '';
+}
+sheetOf('more').addEventListener('sheetopen', () => { renderSleep(); renderAB(); $('#eq-state').textContent = P.eq.on ? P.eq.preset : 'Off'; syncAll('bgPlay'); });
+$('#sleep-chips').addEventListener('click', e => {
+  const c = e.target.closest('[data-sl]'); if (!c) return;
+  const v = c.dataset.sl; P.sleep = isNaN(+v) ? v : +v;
+  P.sleepEnd = typeof P.sleep === 'number' ? Date.now() + P.sleep * 60000 : 0;
+  renderSleep(); lastSec = -1;
+  $('#sleep-chips [aria-checked="true"]').focus({ preventScroll: true });
+  say(P.sleep === 'off' ? 'Sleep timer off' : P.sleep === 'end' ? 'Stops at end of video' : `Stops in ${P.sleep} min`);
+});
+$('#t-ab').addEventListener('click', () => {
+  const ab = P.ab;
+  if (ab.a == null) { ab.a = P.t; say('Point A set at ' + fmt(ab.a)); }
+  else if (ab.b == null) { if (P.t <= ab.a + 1) { say('Play past A, then set B'); return; } ab.b = P.t; P.t = ab.a; say('Repeating A to B'); }
+  else { P.ab = { a: null, b: null }; say('A-B repeat off'); }
+  renderAB();
+});
+$('#t-eq').addEventListener('click', e => { closeSheet('more', { noFocus: true }); setTimeout(() => openSheet('eq', $('#p-more')), noMotion() ? 0 : 120); });
+$('#t-shot').addEventListener('click', () => {
+  closeSheet('more', { noFocus: true });
+  const f = $('#flash'); const a = anim(f, [{ opacity: .85 }, { opacity: 0 }], 260); if (!a) f.style.opacity = 0;
+  say(`Saved to Pictures/OM Player/${P.video.title.slice(0, 18)}_${fmt(P.t).replace(/:/g, '-')}.png`);
+});
+// Equalizer
+$('#eq-presets').innerHTML = Object.keys(EQ_PRESETS).map(p => `<button class="chip pressable" role="radio" data-eqp="${p}">${p}</button>`).join('');
+$('#bands').innerHTML = EQ_BANDS.map((f, i) => `<label class="band"><b id="bv${i}">0</b><input type="range" min="-12" max="12" step="1" value="0" data-band="${i}" aria-label="${f} hertz band, decibels"><span>${f}</span></label>`).join('');
+function renderEq() {
+  $$('#eq-presets .chip').forEach(c => c.setAttribute('aria-checked', c.dataset.eqp === P.eq.preset));
+  P.eq.bands.forEach((v, i) => { $(`[data-band="${i}"]`).value = v; $('#bv' + i).textContent = (v > 0 ? '+' : '') + v; $(`[data-band="${i}"]`).setAttribute('aria-valuetext', `${v} decibels`); });
+  $('#eq-wrap').classList.toggle('off', !P.eq.on);
+  $$('#eq-wrap input').forEach(i => { i.disabled = !P.eq.on; });
+  const pts = P.eq.bands.map((v, i) => [50 + i * 100, 50 - v * 3.6]);
+  let d = `M0 ${pts[0][1]} L${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 1; i < pts.length; i++) { const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], mx = (x0 + x1) / 2; d += ` C${mx} ${y0} ${mx} ${y1} ${x1} ${y1}`; }
+  d += ` L500 ${pts[4][1]}`;
+  $('#eq-path').setAttribute('d', d);
+  $('#eq-state').textContent = P.eq.on ? P.eq.preset : 'Off';
+}
+sheetOf('eq').addEventListener('sheetopen', renderEq);
+$('#eq-presets').addEventListener('click', e => {
+  const c = e.target.closest('[data-eqp]'); if (!c) return;
+  P.eq.preset = c.dataset.eqp; if (EQ_PRESETS[P.eq.preset]) P.eq.bands = EQ_PRESETS[P.eq.preset].slice();
+  if (!P.eq.on) { P.eq.on = true; syncAll('p.eq.on'); }
+  renderEq();
+});
+$('#bands').addEventListener('input', e => { const i = e.target.dataset.band; if (i == null) return; P.eq.bands[+i] = +e.target.value; P.eq.preset = 'Custom'; renderEq(); });
+
+/* ---- Keyboard (no animation: kbd flag) ---- */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (menuOpen) { e.preventDefault(); closeMenu(); return; }
+    const s = topSheet(); if (s) { e.preventDefault(); closeSheet(s); return; }
+    if (P.video && !P.pip) { e.preventDefault(); if (P.locked) { flashUnlock(); return; } closePlayer(); return; }
+    if (S.route.name === 'folder') { e.preventDefault(); go('videos'); }
+    return;
+  }
+  if (!P.video || P.pip || topSheet() || menuOpen || P.locked) return;
+  const tag = e.target.tagName; if (tag === 'INPUT' && e.target !== range) return;
+  if (e.key === ' ' || e.key === 'k') { if (tag === 'BUTTON' && e.key === ' ') return; e.preventDefault(); setPlaying(!P.playing); vtoast(P.playing ? 'Play' : 'Pause'); }
+  else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && e.target !== range) { e.preventDefault(); seekBy(e.key === 'ArrowLeft' ? -10 : 10); hud('seek', 0, e.key === 'ArrowLeft' ? '-0:10' : '+0:10', `${fmt(P.t)} / ${fmt(P.video.dur)}`); hudHide(); }
+  else if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.target !== range) { e.preventDefault(); P.vol = clamp(P.vol + (e.key === 'ArrowUp' ? .05 : -.05), 0, 1); hud('vol', P.vol, Math.round(P.vol * 100) + '%', 'Volume'); hudHide(); }
+  else if (e.key === 'm') { P.vol = P.vol ? 0 : .7; hud('vol', P.vol, Math.round(P.vol * 100) + '%', P.vol ? 'Volume' : 'Muted'); hudHide(); }
+});
+document.addEventListener('visibilitychange', () => { if (document.hidden && P.video && P.playing && !S.bgPlay) setPlaying(false); });
+
+/* =========================================================
+   Init
+   ========================================================= */
+hydrateIcons();
+EASE_OUT = cssVar('--ease-out') || EASE_OUT; EASE_DRAWER = cssVar('--ease-drawer') || EASE_DRAWER;
+applyTheme();
+$$('[data-seg]').forEach(syncSeg); $$('[data-switch]').forEach(syncSwitch);
+renderSpeed(); applySubStyle(); renderSettings();
+const initial = parseHash();
+if (initial.name === 'folder') { S.route = { name: 'videos', id: null }; showTab('videos', false); route(); }
+else { S.route = initial; showTab(initial.name, false); renderLibrary(true); }
+window.OM = { S, openPlayer, closePlayer, go };   // handy for debugging in devtools
+})();
+</script>
+</body>
+</html>

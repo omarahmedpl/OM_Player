@@ -1,0 +1,75 @@
+<title>OM Player Prototype</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ccircle cx=%2750%27 cy=%2750%27 r=%2734%27 fill=%27none%27 stroke=%27%23E11D48%27 stroke-width=%2718%27 stroke-linecap=%27round%27 stroke-dasharray=%27160 214%27 transform=%27rotate(-90 50 50)%27/%3E%3Ccircle cx=%2716%27 cy=%2750%27 r=%2713%27 fill=%27%23F4F4F6%27/%3E%3C/svg%3E">
+<style>
+  body { min-height: 100vh; display: flex; flex-direction: column; background: radial-gradient(1200px 600px at 50% -10%, var(--primary-soft), transparent 60%), var(--bg); }
+  header { display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); padding: var(--s-4) var(--s-6); flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: var(--s-3); font-weight: 700; font-size: var(--fs-lg); letter-spacing: -0.02em; }
+  .brand small { display: block; font-weight: 500; font-size: var(--fs-xs); color: var(--text-3); letter-spacing: 0; }
+  .logo { width: 40px; height: 40px; border-radius: var(--r-md); background: var(--surface-2); display: grid; place-items: center; box-shadow: inset 0 0 0 1px var(--hairline); }
+  .logo .om-mark { width: 28px; height: 28px; }
+
+  /* Segmented control: clipped highlight slides between options */
+  .seg { position: relative; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 4px; border-radius: var(--r-full); background: var(--surface-2); border: 1px solid var(--hairline); }
+  .seg button { position: relative; z-index: 1; min-height: 36px; padding: 0 var(--s-5); border-radius: var(--r-full); color: var(--text-2); font-weight: 600; font-size: var(--fs-sm); display: flex; align-items: center; gap: var(--s-2); transition: color var(--dur-fast) ease; }
+  .seg button[aria-pressed="true"] { color: var(--on-primary); }
+  .seg .thumb { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 4px); border-radius: var(--r-full); background: var(--primary); transition: transform var(--dur-base) var(--ease-in-out); }
+  .seg[data-v="desktop"] .thumb { transform: translateX(100%); }
+
+  main { flex: 1; display: grid; place-items: center; padding: var(--s-4) var(--s-4) var(--s-8); }
+  .stage { display: none; }
+  .stage.on { display: block; animation: in var(--dur-base) var(--ease-out); }
+  @keyframes in { from { opacity: 0; transform: translateY(6px); } }
+
+  .phone { width: 390px; height: 844px; border-radius: 54px; padding: 12px; background: #000; box-shadow: var(--shadow-3), inset 0 0 0 2px var(--hairline-strong); }
+  .phone iframe { width: 100%; height: 100%; border: 0; border-radius: 42px; background: var(--bg); }
+  .window { width: min(1280px, calc(100vw - 32px)); aspect-ratio: 16 / 10; max-height: calc(100vh - 140px); border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow-3), 0 0 0 1px var(--hairline-strong); }
+  .window iframe { width: 100%; height: 100%; border: 0; display: block; background: var(--bg); }
+  .hint { text-align: center; color: var(--text-3); font-size: var(--fs-sm); margin-top: var(--s-4); }
+  .hint kbd { font-family: var(--font-mono); font-size: var(--fs-xs); padding: 2px 6px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--hairline); color: var(--text-2); }
+  a.open { color: var(--accent); }
+
+  /* On a real phone, skip the device frame and fill the screen */
+  @media (max-width: 480px) {
+    header { padding: var(--s-3) var(--s-4); }
+    main { padding: 0; }
+    .phone { width: 100vw; height: calc(100dvh - 72px); border-radius: 0; padding: 0; box-shadow: none; }
+    .phone iframe { border-radius: 0; }
+    .window { width: calc(100vw - 32px); }
+    .hint { padding: 0 var(--s-4); }
+  }
+</style>
+<header>
+  <div class="brand">
+    <div class="logo" aria-hidden="true"><svg class="om-mark" viewBox="0 0 100 100" aria-hidden="true"><circle class="trk" cx="50" cy="50" r="34"/><circle class="arc" cx="50" cy="50" r="34" transform="rotate(-90 50 50)"/><circle class="dot" cx="16" cy="50" r="9"/></svg></div>
+    <div><b style="font-weight:800">OM</b> <span style="font-weight:500;color:var(--text-2)">Player</span><small>Interactive UI prototype · v0.1</small></div>
+  </div>
+  <div class="seg" id="seg" data-v="mobile" role="group" aria-label="Platform">
+    <span class="thumb" aria-hidden="true"></span>
+    <button aria-pressed="true" data-v="mobile">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>Android</button>
+    <button aria-pressed="false" data-v="desktop">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>PC</button>
+  </div>
+</header>
+<main>
+  <section class="stage on" id="mobile">
+    <div class="phone"><iframe src="mobile.html" title="OM Player Android prototype"></iframe></div>
+    <p class="hint">Open a video, then swipe: left side for brightness, right side for volume, sideways to seek. Double-tap to skip, long-press for 2×. <a class="open" href="mobile.html" target="_blank">Open full screen</a></p>
+  </section>
+  <section class="stage" id="desktop">
+    <div class="window"><iframe src="desktop.html" title="OM Player PC prototype" allow="fullscreen"></iframe></div>
+    <p class="hint">Press <kbd>?</kbd> in the player for shortcuts · <kbd>Ctrl</kbd> <kbd>K</kbd> for the command palette. <a class="open" href="desktop.html" target="_blank">Open full window</a></p>
+  </section>
+</main>
+<script>
+  const seg = document.getElementById('seg');
+  function show(v) {
+    seg.dataset.v = v;
+    seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+    document.querySelectorAll('.stage').forEach(s => s.classList.toggle('on', s.id === v));
+    try { localStorage.setItem('om-proto-view', v); } catch (e) {}
+  }
+  seg.addEventListener('click', e => { const b = e.target.closest('button'); if (b) show(b.dataset.v); });
+  try { const v = localStorage.getItem('om-proto-view'); if (v === 'desktop') show(v); } catch (e) {}
+</script>

@@ -1,0 +1,105 @@
+/* OM Player — shared design tokens. Every prototype screen imports this file.
+   Dark-first (media apps live in the dark); light theme provided for library screens. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap');
+
+/* .scheme-dark re-applies the dark values to a subtree (e.g. the player) under the light theme */
+:root, .scheme-dark {
+  color-scheme: dark;
+  /* Surfaces */
+  --bg: #0A0A0E;
+  --surface-1: #121218;
+  --surface-2: #1A1A22;
+  --surface-3: #24242E;
+  --scrim: rgba(6, 6, 10, 0.72);
+  --glass: rgba(22, 22, 30, 0.62);
+  --hairline: rgba(255, 255, 255, 0.08);
+  --hairline-strong: rgba(255, 255, 255, 0.14);
+
+  /* Text */
+  --text: #F4F4F6;
+  --text-2: #B4B4BE;   /* 8.9:1 on --bg */
+  --text-3: #8A8A96;   /* 5.3:1 on --bg — minimum for meta text */
+  --on-video: #FFFFFF;
+
+  /* Brand */
+  --primary: #E11D48;          /* OM rose — 4.7:1 with white text */
+  --primary-hover: #F43F5E;
+  --primary-soft: rgba(244, 63, 94, 0.14);
+  --on-primary: #FFFFFF;
+  --accent: #60A5FA;           /* secondary info / links */
+  --success: #34D399;
+  --warning: #FBBF24;
+  --danger: #F87171;
+  --ring: #FB7185;
+
+  /* Type scale (Inter) */
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --fs-xs: 12px; --fs-sm: 13px; --fs-base: 15px; --fs-md: 17px;
+  --fs-lg: 20px; --fs-xl: 24px; --fs-2xl: 32px;
+  --lh: 1.5;
+
+  /* Spacing (4pt grid) */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px;
+  --s-6: 24px; --s-8: 32px; --s-10: 40px; --s-12: 48px;
+
+  /* Radius */
+  --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-xl: 22px; --r-full: 999px;
+
+  /* Elevation */
+  --shadow-1: 0 1px 2px rgba(0,0,0,.4);
+  --shadow-2: 0 8px 24px rgba(0,0,0,.45);
+  --shadow-3: 0 24px 64px rgba(0,0,0,.55);
+
+  /* Motion (Emil Kowalski curves) */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-press: 140ms;
+  --dur-fast: 180ms;
+  --dur-base: 240ms;
+  --dur-sheet: 380ms;
+
+  /* Touch */
+  --tap: 44px;     /* minimum hit target */
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #F7F7F9; --surface-1: #FFFFFF; --surface-2: #F0F0F4; --surface-3: #E6E6EC;
+  --glass: rgba(255,255,255,.72); --hairline: rgba(0,0,0,.08); --hairline-strong: rgba(0,0,0,.14);
+  --text: #111116; --text-2: #4A4A55; --text-3: #5E5E69;
+  --accent: #2563EB; --success: #047857; --warning: #B45309; --danger: #DC2626;
+  --primary: #BE123C; --primary-hover: #9F1239; --primary-soft: rgba(225,29,72,.10); --ring: #E11D48;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 400 var(--fs-base)/var(--lh) var(--font);
+  -webkit-font-smoothing: antialiased; font-feature-settings: 'cv11', 'ss01';
+}
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: var(--r-sm); }
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* OM Player mark (Playhead): resume ring + playhead dot. Theme-aware via tokens. */
+.om-mark { display: block; flex-shrink: 0; overflow: visible; }
+.om-mark circle { fill: none; stroke-width: 12; }
+.om-mark .trk { stroke: var(--surface-3); }
+.om-mark .arc { stroke: var(--primary); stroke-linecap: round; stroke-dasharray: 160 214; }
+.om-mark .dot { fill: var(--text); stroke: none; }
+/* At 24px and below the track drops out and strokes thicken */
+.om-mark.sm .trk { display: none; }
+.om-mark.sm .arc { stroke-width: 18; }
+.om-mark.sm .dot { r: 13px; }
+
+/* Shared pressable feedback */
+.pressable { transition: transform var(--dur-press) var(--ease-out), background-color var(--dur-fast) ease, opacity var(--dur-fast) ease; }
+.pressable:active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) { .pressable:hover { background-color: var(--surface-3); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 1ms !important; animation-duration: 1ms !important; }
+}

@@ -1,0 +1,9 @@
+.gradle/
+build/
+*/build/
+local.properties
+.idea/
+.kotlin/
+*.iml
+captures/
+graphify-out/
