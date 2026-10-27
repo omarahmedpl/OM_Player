@@ -56,6 +56,7 @@ class FakePlayerEngine : PlayerEngine {
     override fun selectAudioTrack(id: String) = _state.update { s -> s.copy(audioTracks = s.audioTracks.map { it.copy(selected = it.id == id) }) }
     override fun selectSubtitleTrack(id: String?) = _state.update { s -> s.copy(subtitleTracks = s.subtitleTracks.map { it.copy(selected = it.id == id) }) }
     override fun setSubtitleDelay(delayMs: Long) = _state.update { it.copy(subtitleDelayMs = delayMs) }
+    override fun setSubtitleStyle(scale: Float, background: Boolean) = _state.update { it.copy(subtitleScale = scale, subtitleBackground = background) }
     override fun stop() { pause(); _state.value = PlayerState() }
     override fun release() { scope.cancel() }
 }

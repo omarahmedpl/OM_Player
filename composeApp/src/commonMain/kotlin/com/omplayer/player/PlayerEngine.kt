@@ -28,6 +28,10 @@ data class PlayerState(
     val audioTracks: List<Track> = emptyList(),
     val subtitleTracks: List<Track> = emptyList(),
     val subtitleDelayMs: Long = 0,
+    /** Subtitle text size multiplier (1f = platform default). */
+    val subtitleScale: Float = 1f,
+    /** Draw a translucent box behind subtitle text. */
+    val subtitleBackground: Boolean = true,
     val videoWidth: Int = 0,
     val videoHeight: Int = 0,
     val error: String? = null,
@@ -54,6 +58,8 @@ interface PlayerEngine {
     fun selectSubtitleTrack(id: String?)
     /** Positive delays subtitles. Survives seeks (an MX Player pain point). */
     fun setSubtitleDelay(delayMs: Long)
+    /** Subtitle size multiplier and background box. Implementations publish them in [state]. */
+    fun setSubtitleStyle(scale: Float, background: Boolean) {}
     /** Load an external subtitle file (path or URI) for the current item. */
     fun addSubtitle(uri: String) {}
     fun stop()
