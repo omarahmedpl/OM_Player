@@ -149,7 +149,10 @@ Then: Codex review, Sonnet fixes, Haiku checks, a build of both targets, and a d
 - [x] Shared contracts, theme, logo, fake engine, sample repository
 - [x] Desktop target compiles
 - [x] Android `assembleDebug` builds (19.6 MB debug APK)
-- [ ] The four agents above
+- [x] `App(deps, openRequests: Flow<MediaItem>)` hook for Android ACTION_VIEW, desktop drag-and-drop and CLI paths
+- [x] Library & settings UI agent: done (`ui/library/**`, `ui/components/**`), not yet committed
+- [ ] Player UI, Android engine, desktop engine agents (were running at last update; check `git status` for their files)
+- [ ] Integrate: full build of both targets, then commit
 - [ ] Persistence (settings + progress) on disk
 - [ ] FFmpeg audio extension for Media3 (AC3/EAC3/DTS)
 - [ ] Real-device test (no phone attached; `adb devices` was empty)
@@ -166,7 +169,15 @@ Then: Codex review, Sonnet fixes, Haiku checks, a build of both targets, and a d
 
 ---
 
-## 6. Next steps
+## 6. Continuing with Codex
+If the Claude session stops, continue in Codex from the project folder:
+```bash
+cd /home/omarahmed/Downloads/OM_Player
+codex "Read AGENTS.md and docs/HANDOFF.md, check git status, build both targets, then continue Milestone 1 from the status checklist."
+```
+Codex reads `AGENTS.md` automatically.
+
+## 7. Next steps
 1. Confirm `assembleDebug`, then dispatch the four Milestone 1 agents with the contracts above.
 2. Integrate, then run Codex review → Sonnet fixes → Haiku checks.
 3. Run the desktop app with a real file (`./gradlew :composeApp:run`); install the APK on a phone or emulator (`~/Android/Sdk/emulator`).

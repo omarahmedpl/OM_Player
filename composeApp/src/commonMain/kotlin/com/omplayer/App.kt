@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -18,10 +21,17 @@ import com.omplayer.ui.player.PlayerScreen
 /** What's on screen. The player is an overlay above the library so the library keeps its scroll state. */
 data class NowPlaying(val item: MediaItem, val queue: List<MediaItem>)
 
+/**
+ * @param openRequests items to open straight in the player: Android ACTION_VIEW intents,
+ * desktop drag-and-drop and command-line paths. Each emission replaces what's playing.
+ */
 @Composable
-fun App(deps: AppDeps) {
+fun App(deps: AppDeps, openRequests: Flow<MediaItem> = emptyFlow()) {
     var settings by remember { mutableStateOf(AppSettings()) }
     var nowPlaying by remember { mutableStateOf<NowPlaying?>(null) }
+    LaunchedEffect(openRequests) {
+        openRequests.collect { nowPlaying = NowPlaying(it, listOf(it)) }
+    }
 
     CompositionLocalProvider(LocalAppDeps provides deps) {
         OmTheme(settings.theme) {
