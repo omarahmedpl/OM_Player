@@ -1,5 +1,12 @@
 package com.omplayer.ui.library
 
+import com.omplayer.theme.OmMotion
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -139,14 +146,25 @@ fun LibraryRoot(
             } else Modifier.windowInsetsPadding(WindowInsets.safeDrawing)),
     ) {
         val body: @Composable () -> Unit = {
+          AnimatedContent(
+            targetState = dest,
+            contentKey = { it::class },
+            transitionSpec = {
+                (fadeIn(tween(OmMotion.Fast, easing = OmMotion.EaseOut)) +
+                    slideInVertically(tween(OmMotion.Base, easing = OmMotion.EaseOut)) { 18 })
+                    .togetherWith(fadeOut(tween(120)))
+            },
+            label = "dest",
+          ) { shownDest ->
             Body(
-                dest = dest, state = state, folders = folders, allItems = allItems, query = query, prefs = prefs,
+                dest = shownDest, state = state, folders = folders, allItems = allItems, query = query, prefs = prefs,
                 actions = actions, settings = settings, onSettingsChange = onSettingsChange, recentUrls = recentUrls,
                 onRecentUrls = { recentUrls = it }, onPlay = onPlay,
                 onOpenFolder = { dest = Dest.Folder(it.id, dest) },
                 onRefresh = { },
                 repoAccess = { repo.requestAccess() },
             )
+          }
         }
         val title = titleFor(dest, folders)
         val canBack = dest is Dest.Folder

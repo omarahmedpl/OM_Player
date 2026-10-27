@@ -55,11 +55,13 @@ class FileSystemMediaRepository(
         for (f in children) {
             if (f.name.startsWith(".")) continue
             if (f.isDirectory) {
-                if (depth < maxDepth) scan(f, depth + 1, seen, out)
+                if (depth < maxDepth && f.name !in SKIP_DIRS) scan(f, depth + 1, seen, out)
             } else {
                 val ext = f.extension.lowercase()
                 val audio = ext in AUDIO
                 if (!audio && ext !in VIDEO) continue
+                // ".ts" is also TypeScript: accept only video-sized files that aren't .d.ts declarations.
+                if (ext == "ts" && (f.name.endsWith(".d.ts") || f.length() < MIN_TS_BYTES)) continue
                 val path = f.absolutePath
                 if (!seen.add(path)) continue
                 val attrs = runCatching { Files.readAttributes(f.toPath(), BasicFileAttributes::class.java) }.getOrNull()
@@ -88,6 +90,9 @@ class FileSystemMediaRepository(
     }
 
     companion object {
+        /** Code/dependency/build folders never hold the user's media and can be huge. */
+        val SKIP_DIRS = setOf("node_modules", "build", "dist", "target", "out", "vendor", "__pycache__", "site-packages", "venv", "Pods")
+        private const val MIN_TS_BYTES = 512L * 1024
         val VIDEO = setOf("mkv", "mp4", "avi", "mov", "webm", "m4v", "ts", "flv", "wmv", "mpg", "mpeg", "3gp")
         val AUDIO = setOf("mp3", "flac", "m4a", "aac", "ogg", "opus", "wav")
         val ALL get() = VIDEO + AUDIO

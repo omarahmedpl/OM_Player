@@ -1,5 +1,10 @@
 package com.omplayer.ui.player
 
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.hoverable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -65,12 +70,24 @@ internal fun delayLabel(ms: Long): String = when {
     else -> "$ms ms"
 }
 
-/** Click with the 0.97 press scale (never from 0), ease-out, 140 ms. */
-internal fun Modifier.pressable(enabled: Boolean = true, role: Role = Role.Button, onClick: () -> Unit): Modifier = composed {
+/** Player click: hand cursor, circular hover tint over video, 0.97 press scale (140 ms ease-out). */
+internal fun Modifier.pressable(
+    enabled: Boolean = true,
+    role: Role = Role.Button,
+    hoverShape: Shape = CircleShape,
+    onClick: () -> Unit,
+): Modifier = composed {
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
+    val hovered by src.collectIsHoveredAsState()
     val s by animateFloatAsState(if (pressed) OmMotion.PressScale else 1f, tween(OmMotion.Press, easing = OmMotion.EaseOut))
+    val tint by animateFloatAsState(
+        when { !enabled -> 0f; pressed -> 0.22f; hovered -> 0.14f; else -> 0f }, tween(OmMotion.Fast),
+    )
     this.graphicsLayer { scaleX = s; scaleY = s }
+        .then(if (enabled) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
+        .hoverable(src, enabled)
+        .background(Color.White.copy(alpha = tint), hoverShape)
         .clickable(interactionSource = src, indication = null, enabled = enabled, role = role, onClick = onClick)
 }
 

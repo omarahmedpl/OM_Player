@@ -144,18 +144,28 @@ desktopMain/  main.kt (Window 1280×800, fakes for now), VideoSurface.desktop.kt
 
 Then: Codex review, Sonnet fixes, Haiku checks, a build of both targets, and a desktop run.
 
-### Status at handoff
-- [x] Gradle scaffold, version catalog, wrapper, manifest
-- [x] Shared contracts, theme, logo, fake engine, sample repository
-- [x] Desktop target compiles
-- [x] Android `assembleDebug` builds (19.6 MB debug APK)
-- [x] `App(deps, openRequests: Flow<MediaItem>)` hook for Android ACTION_VIEW, desktop drag-and-drop and CLI paths
-- [x] Library & settings UI agent: done (`ui/library/**`, `ui/components/**`), not yet committed
-- [ ] Player UI, Android engine, desktop engine agents (were running at last update; check `git status` for their files)
-- [ ] Integrate: full build of both targets, then commit
-- [ ] Persistence (settings + progress) on disk
-- [ ] FFmpeg audio extension for Media3 (AC3/EAC3/DTS)
-- [ ] Real-device test (no phone attached; `adb devices` was empty)
+### Status at handoff (2026-10-28)
+- [x] Gradle scaffold, version catalog, wrapper, manifest; shared contracts, theme, logo, fake engine
+- [x] Four agents done and integrated (commit `e6bbba6`): library & settings UI, player UI, Media3 engine, vlcj engine
+- [x] Contracts added during integration: `PlatformBackHandler` (expect/actual), `PlatformActions.inPictureInPicture`,
+      `PlayerEngine.setSubtitleStyle` + `PlayerState.subtitleScale/subtitleBackground`, `App(deps, openRequests)`
+- [x] Both targets build (`compileKotlinDesktop` + `assembleDebug`)
+- [x] **Desktop verified with a real video**: vlcj frames render inside Compose with controls overlaid; replay at end works
+- [x] Desktop hover polish: hand cursor + hover tint on all `pressable`s (library `ui/components/Components.kt`, player `ui/player/PlayerUtil.kt`), panel rows, seek bar; library screens crossfade; player opens with fade + 0.98 scale
+- [x] Desktop scanner skips `node_modules`, `build`, `dist`, etc. and TypeScript `.ts`/`.d.ts` files
+- [ ] **NEXT (user-reported): desktop volume slider.** Only mute exists in `BottomBar` (`ui/player/PlayerChrome.kt` ~line 143).
+      Add a horizontal slider (0..2, 100% mark, boost above 1) next to the mute button on desktop, wired to the
+      existing `setVolume(v)` in `PlayerScreen.kt` (pass `volume = st.volume` and `onVolume = ::setVolume` into BottomBar).
+      Mouse wheel over the slider should change volume too.
+- [ ] Verify hover/cursor on desktop by hand (can't be screenshotted here; no xdotool)
+- [ ] Codex review of Milestone 1 code → fix findings
+- [ ] Desktop: subtitle background box (libVLC freetype is global), `bufferedMs` always 0, duration/resolution unknown at scan (parse with vlcj)
+- [ ] Android: subtitle delay doesn't shift cues yet (stored only); Original scale = Fit; no background-play service; FFmpeg audio extension (AC3/EAC3/DTS) not added
+- [ ] Persistence of settings (theme, gestures…) on both platforms; progress already persists (SharedPreferences / ~/.config/om-player/progress.json)
+- [ ] Real-device test on Android (AVD `azkar` exists; no phone attached)
+
+How to check the desktop app visually here: run `./gradlew :composeApp:run --args="/path/video.mp4"`, then
+`import -window "$(xwininfo -root -tree | grep -m1 '"OM Player"' | awk '{print $1}')" shot.png` (Wayland blocks root capture).
 
 ---
 

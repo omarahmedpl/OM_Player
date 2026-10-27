@@ -1,5 +1,10 @@
 package com.omplayer.ui.components
 
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.hoverable
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -108,24 +113,42 @@ fun OmText(
 
 // ---------- interaction ----------
 
-/** Click with the 0.97 press scale (ease-out, 140 ms) and no ripple. */
+/**
+ * Click with hover + press feedback, no ripple:
+ * hand cursor, a soft tint in [hoverShape] that fades in on hover (180 ms ease) and deepens on press,
+ * and the 0.97 press scale (140 ms ease-out). Hover never fires on touch, so phones only see the press.
+ */
 @Composable
 fun Modifier.pressable(
     onClick: () -> Unit,
     enabled: Boolean = true,
     role: Role? = Role.Button,
     onClickLabel: String? = null,
+    hoverShape: Shape = RoundedCornerShape(OmRadius.md),
+    hoverColor: Color = OmTheme.colors.text,
 ): Modifier {
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
+    val hovered by src.collectIsHoveredAsState()
     val scale by animateFloatAsState(
         if (pressed && enabled) OmMotion.PressScale else 1f,
         tween(OmMotion.Press, easing = OmMotion.EaseOut), label = "press",
     )
+    val tint by animateFloatAsState(
+        when { !enabled -> 0f; pressed -> 0.12f; hovered -> 0.07f; else -> 0f },
+        tween(OmMotion.Fast), label = "hover",
+    )
     return this
         .graphicsLayer { scaleX = scale; scaleY = scale }
+        .then(if (enabled) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
+        .hoverable(src, enabled)
+        .background(hoverColor.copy(alpha = tint), hoverShape)
         .clickable(interactionSource = src, indication = null, enabled = enabled, onClickLabel = onClickLabel, role = role, onClick = onClick)
 }
+
+/** Hand cursor for clickables that keep their own indication (rows with the default hover/ripple). */
+fun Modifier.handCursor(enabled: Boolean = true): Modifier =
+    if (enabled) pointerHoverIcon(PointerIcon.Hand) else this
 
 /** List entrance: fade + 12dp rise, 40 ms stagger, only the first 8 items. */
 @Composable

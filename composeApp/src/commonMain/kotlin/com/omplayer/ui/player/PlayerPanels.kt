@@ -1,5 +1,7 @@
 package com.omplayer.ui.player
 
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -160,7 +162,7 @@ private fun BottomSheet(title: String, onDismiss: () -> Unit, content: @Composab
 internal fun OptionRow(label: String, selected: Boolean, onClick: () -> Unit, sub: String? = null) {
     val c = OmTheme.colors
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.RadioButton, onClick = onClick)
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).pointerHoverIcon(PointerIcon.Hand).clickable(role = Role.RadioButton, onClick = onClick)
             .padding(horizontal = OmSpace.s4, vertical = OmSpace.s2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -240,7 +242,7 @@ internal fun SubtitlePanel(
     st.subtitleTracks.forEach { OptionRow(it.label, it.selected, { onSelect(it.id) }) }
     Text(
         "Add subtitle file…", color = c.accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onAddFile)
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).pointerHoverIcon(PointerIcon.Hand).clickable(role = Role.Button, onClick = onAddFile)
             .padding(horizontal = OmSpace.s4, vertical = OmSpace.s3),
     )
     SectionLabel("SIZE  ·  ${(scale * 100).roundToInt()}%")
@@ -315,12 +317,12 @@ internal fun MorePanel(
     SectionLabel("PLAYBACK")
     if (canPip) Text(
         "Picture in picture", color = c.text, fontSize = 15.sp,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onPip)
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).pointerHoverIcon(PointerIcon.Hand).clickable(role = Role.Button, onClick = onPip)
             .padding(horizontal = OmSpace.s4, vertical = OmSpace.s3),
     )
     if (onShortcuts != null) Text(
         "Keyboard shortcuts", color = c.text, fontSize = 15.sp,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onShortcuts)
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).pointerHoverIcon(PointerIcon.Hand).clickable(role = Role.Button, onClick = onShortcuts)
             .padding(horizontal = OmSpace.s4, vertical = OmSpace.s3),
     )
     Text(

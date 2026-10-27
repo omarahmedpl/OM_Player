@@ -1,5 +1,7 @@
 package com.omplayer.ui.player
 
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -182,6 +184,7 @@ internal fun SeekBar(
                 contentDescription = "Seek"
                 stateDescription = "${formatTime(positionMs)} of ${formatTime(durationMs)}"
             }
+            .pointerHoverIcon(PointerIcon.Hand)
             .pointerInput(Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown()

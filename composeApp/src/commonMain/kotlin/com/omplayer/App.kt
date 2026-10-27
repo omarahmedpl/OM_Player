@@ -1,5 +1,11 @@
 package com.omplayer
 
+import com.omplayer.theme.OmMotion
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,14 +47,25 @@ fun App(deps: AppDeps, openRequests: Flow<MediaItem> = emptyFlow()) {
                     onSettingsChange = { settings = it },
                     onPlay = { item, queue -> nowPlaying = NowPlaying(item, queue) },
                 )
-                nowPlaying?.let { np ->
-                    PlayerScreen(
-                        item = np.item,
-                        queue = np.queue,
-                        settings = settings,
-                        onItemChange = { nowPlaying = np.copy(item = it) },
-                        onClose = { nowPlaying = null },
-                    )
+                // Player opens with a short fade + 0.98→1 scale; closes faster (exit < enter).
+                AnimatedVisibility(
+                    visible = nowPlaying != null,
+                    enter = fadeIn(tween(OmMotion.Base, easing = OmMotion.EaseOut)) +
+                        scaleIn(tween(OmMotion.Base, easing = OmMotion.EaseOut), initialScale = 0.98f),
+                    exit = fadeOut(tween(OmMotion.Fast, easing = OmMotion.EaseOut)),
+                ) {
+                    // Keep the last item while the exit animation runs.
+                    val last = remember { arrayOfNulls<NowPlaying>(1) }
+                    nowPlaying?.let { last[0] = it }
+                    last[0]?.let { np ->
+                        PlayerScreen(
+                            item = np.item,
+                            queue = np.queue,
+                            settings = settings,
+                            onItemChange = { nowPlaying = np.copy(item = it) },
+                            onClose = { nowPlaying = null },
+                        )
+                    }
                 }
             }
         }
