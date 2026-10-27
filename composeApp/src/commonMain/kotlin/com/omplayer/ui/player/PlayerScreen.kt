@@ -453,6 +453,8 @@ private fun PlayerContent(
                     onLock = { locked = true; controlsVisible = false; unlockVisible = true; interaction++ },
                     onFullscreen = ::toggleFullscreen,
                     onMute = ::toggleMute,
+                    volume = st.volume,
+                    onVolume = { setVolume(it); poke() },
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }

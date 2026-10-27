@@ -153,10 +153,7 @@ Then: Codex review, Sonnet fixes, Haiku checks, a build of both targets, and a d
 - [x] **Desktop verified with a real video**: vlcj frames render inside Compose with controls overlaid; replay at end works
 - [x] Desktop hover polish: hand cursor + hover tint on all `pressable`s (library `ui/components/Components.kt`, player `ui/player/PlayerUtil.kt`), panel rows, seek bar; library screens crossfade; player opens with fade + 0.98 scale
 - [x] Desktop scanner skips `node_modules`, `build`, `dist`, etc. and TypeScript `.ts`/`.d.ts` files
-- [ ] **NEXT (user-reported): desktop volume slider.** Only mute exists in `BottomBar` (`ui/player/PlayerChrome.kt` ~line 143).
-      Add a horizontal slider (0..2, 100% mark, boost above 1) next to the mute button on desktop, wired to the
-      existing `setVolume(v)` in `PlayerScreen.kt` (pass `volume = st.volume` and `onVolume = ::setVolume` into BottomBar).
-      Mouse wheel over the slider should change volume too.
+- [x] Desktop volume slider (0–200%, boost shown in warning colour) next to mute in `BottomBar`; compiles, not yet hand-tested
 - [ ] Verify hover/cursor on desktop by hand (can't be screenshotted here; no xdotool)
 - [ ] Codex review of Milestone 1 code → fix findings
 - [ ] Desktop: subtitle background box (libVLC freetype is global), `bufferedMs` always 0, duration/resolution unknown at scan (parse with vlcj)

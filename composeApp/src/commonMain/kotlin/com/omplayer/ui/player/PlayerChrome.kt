@@ -1,5 +1,7 @@
 package com.omplayer.ui.player
 
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Slider
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.animation.core.animateDpAsState
@@ -123,6 +125,8 @@ internal fun BottomBar(
     onLock: () -> Unit,
     onFullscreen: () -> Unit,
     onMute: () -> Unit,
+    volume: Float = 1f,
+    onVolume: (Float) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val c = OmTheme.colors
@@ -141,6 +145,19 @@ internal fun BottomBar(
             PIconButton(Icons.Rounded.SkipPrevious, "Previous video", onPrev, enabled = hasPrev)
             PIconButton(Icons.Rounded.SkipNext, "Next video", onNext, enabled = hasNext)
             if (desktop) PIconButton(if (muted) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp, if (muted) "Unmute" else "Mute", onMute)
+            if (desktop) {
+                // 0..200%; above 100% is software boost (warning colour).
+                Slider(
+                    value = volume, onValueChange = onVolume, valueRange = 0f..2f,
+                    modifier = Modifier.width(112.dp).pointerHoverIcon(PointerIcon.Hand)
+                        .semantics { contentDescription = "Volume ${(volume * 100).toInt()}%" },
+                    colors = SliderDefaults.colors(
+                        thumbColor = c.onVideo,
+                        activeTrackColor = if (volume > 1f) c.warning else c.primary,
+                        inactiveTrackColor = c.onVideo.copy(alpha = 0.3f),
+                    ),
+                )
+            }
             Spacer(Modifier.width(OmSpace.s2))
             Text(
                 "${formatTime(st.positionMs)} / ${formatTime(st.durationMs)}",
