@@ -163,7 +163,7 @@ internal fun MediaCell(item: MediaItem, queue: List<MediaItem>, grid: Boolean, a
     ).joinToString(" · ")
 
     @Composable
-    fun thumb(m: Modifier) = ThumbnailPlaceholder(item.id, m.clip(RoundedCornerShape(OmRadius.sm)), item.isAudio) {
+    fun thumb(m: Modifier) = ThumbnailPlaceholder(item.id, m.clip(RoundedCornerShape(OmRadius.sm)), item.isAudio, uri = item.uri) {
         if (item.durationMs > 0) MetaChip(formatDuration(item.durationMs), Modifier.align(Alignment.BottomEnd).padding(4.dp))
         if (frac > 0f) ProgressBar(frac, Modifier.align(Alignment.BottomStart))
     }

@@ -59,6 +59,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import com.omplayer.VideoThumbnail
+import com.omplayer.AudioArtwork
 import androidx.compose.ui.unit.sp
 import com.omplayer.theme.OmMotion
 import com.omplayer.theme.OmRadius
@@ -342,7 +344,13 @@ fun ProgressBar(fraction: Float, modifier: Modifier = Modifier, height: androidx
 
 /** Deterministic gradient from the id hash. Real thumbnails come later. */
 @Composable
-fun ThumbnailPlaceholder(seed: String, modifier: Modifier = Modifier, isAudio: Boolean = false, content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {}) {
+fun ThumbnailPlaceholder(
+    seed: String,
+    modifier: Modifier = Modifier,
+    isAudio: Boolean = false,
+    uri: String? = null,
+    content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
+) {
     val c = OmTheme.colors
     val h = ((seed.hashCode() % 360) + 360) % 360
     val brush = remember(seed) {
@@ -353,6 +361,10 @@ fun ThumbnailPlaceholder(seed: String, modifier: Modifier = Modifier, isAudio: B
             if (isAudio) Icons.Rounded.MusicNote else Icons.Rounded.PlayArrow, null,
             tint = c.onVideo.copy(alpha = 0.55f), modifier = Modifier.size(28.dp),
         )
+        if (uri != null) {
+            if (isAudio) AudioArtwork(uri, Modifier.matchParentSize())
+            else VideoThumbnail(uri, Modifier.matchParentSize())
+        }
         content()
     }
 }

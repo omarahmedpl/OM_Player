@@ -2,16 +2,21 @@ package com.omplayer.ui.player
 
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Slider
-import androidx.compose.ui.input.pointer.pointerHoverIcon
-import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,6 +26,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -34,6 +40,8 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Replay
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Subtitles
@@ -47,8 +55,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -73,7 +85,14 @@ import com.omplayer.theme.OmTheme
 import kotlin.math.roundToInt
 
 @Composable
-internal fun TopBar(title: String, meta: String, onBack: () -> Unit, modifier: Modifier = Modifier) {
+internal fun TopBar(
+    title: String,
+    meta: String,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    onRotate: (() -> Unit)? = null,
+    onExitFullscreen: (() -> Unit)? = null,
+) {
     val c = OmTheme.colors
     Row(
         modifier.fillMaxWidth()
@@ -87,6 +106,9 @@ internal fun TopBar(title: String, meta: String, onBack: () -> Unit, modifier: M
             Text(title, color = c.onVideo, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (meta.isNotEmpty()) Text(meta, color = c.text2, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+        if (onRotate != null) PIconButton(Icons.Rounded.ScreenRotation, "Rotate screen", onRotate)
+        // Desktop fullscreen has no window title bar, so give it an obvious way out (Esc and F also work).
+        if (onExitFullscreen != null) PIconButton(Icons.Rounded.Close, "Exit full screen", onExitFullscreen, pointerIcon = PointerIcon.Hand)
     }
 }
 
@@ -130,46 +152,87 @@ internal fun BottomBar(
     modifier: Modifier = Modifier,
 ) {
     val c = OmTheme.colors
-    Column(
-        modifier.fillMaxWidth()
-            .background(Brush.verticalGradient(listOf(Color.Transparent, c.scrim.copy(alpha = 0.8f))))
-            .padding(horizontal = OmSpace.s4).padding(top = OmSpace.s8, bottom = OmSpace.s2),
-    ) {
-        SeekBar(st.positionMs, st.bufferedMs, st.durationMs, onSeek, onDragging, Modifier.fillMaxWidth())
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            if (desktop) {
-                PIconButton(if (st.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (st.isPlaying) "Pause" else "Play", onTogglePlay)
-            } else {
-                PIconButton(Icons.Rounded.Lock, "Lock controls", onLock)
-            }
-            PIconButton(Icons.Rounded.SkipPrevious, "Previous video", onPrev, enabled = hasPrev)
-            PIconButton(Icons.Rounded.SkipNext, "Next video", onNext, enabled = hasNext)
-            if (desktop) PIconButton(if (muted) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp, if (muted) "Unmute" else "Mute", onMute)
-            if (desktop) {
-                // 0..200%; above 100% is software boost (warning colour).
-                Slider(
-                    value = volume, onValueChange = onVolume, valueRange = 0f..2f,
-                    modifier = Modifier.width(112.dp).pointerHoverIcon(PointerIcon.Hand)
-                        .semantics { contentDescription = "Volume ${(volume * 100).toInt()}%" },
-                    colors = SliderDefaults.colors(
-                        thumbColor = c.onVideo,
-                        activeTrackColor = if (volume > 1f) c.warning else c.primary,
-                        inactiveTrackColor = c.onVideo.copy(alpha = 0.3f),
-                    ),
+    val buttonPointer = if (desktop) PointerIcon.Hand else PointerIcon.Default
+    val volumeHoverSource = remember { MutableInteractionSource() }
+    val volumeFocusSource = remember { MutableInteractionSource() }
+    val volumeHovered by volumeHoverSource.collectIsHoveredAsState()
+    val volumeFocused by volumeFocusSource.collectIsFocusedAsState()
+    val playerActions: @Composable () -> Unit = {
+        PIconButton(Icons.Rounded.AspectRatio, "Scale mode: ${scaleMode.name}", onScale, pointerIcon = buttonPointer)
+        PTextButton(speedLabel(speed), "Playback speed", onSpeed, active = speed != 1f, pointerIcon = buttonPointer)
+        PIconButton(Icons.Rounded.Subtitles, "Subtitles", onSubs, pointerIcon = buttonPointer)
+        PIconButton(Icons.Rounded.Audiotrack, "Audio tracks", onAudio, pointerIcon = buttonPointer)
+        PIconButton(if (fullscreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, if (fullscreen) "Exit full screen" else "Full screen", onFullscreen, pointerIcon = buttonPointer)
+        PIconButton(Icons.Rounded.MoreVert, "More", onMore, pointerIcon = buttonPointer)
+    }
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        val compact = !desktop && maxWidth < 600.dp
+        Column(
+            Modifier.fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(Color.Transparent, c.scrim.copy(alpha = 0.8f))))
+                .then(if (desktop) Modifier.clickable(
+                    interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = {},
+                ) else Modifier)
+                .padding(horizontal = OmSpace.s4).padding(top = OmSpace.s8, bottom = OmSpace.s2),
+        ) {
+            SeekBar(st.positionMs, st.bufferedMs, st.durationMs, onSeek, onDragging, Modifier.fillMaxWidth())
+            // Portrait phone: lock · previous · play/pause · next · time spread edge to edge (owner request).
+            Row(
+                if (compact) Modifier.fillMaxWidth() else Modifier,
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = if (compact) Arrangement.SpaceBetween else Arrangement.spacedBy(2.dp),
+            ) {
+                if (!desktop) {
+                    PIconButton(Icons.Rounded.Lock, "Lock controls", onLock, pointerIcon = buttonPointer)
+                }
+                PIconButton(Icons.Rounded.SkipPrevious, "Previous video", onPrev, enabled = hasPrev, pointerIcon = buttonPointer)
+                PIconButton(if (st.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (st.isPlaying) "Pause" else "Play", onTogglePlay, pointerIcon = buttonPointer)
+                PIconButton(Icons.Rounded.SkipNext, "Next video", onNext, enabled = hasNext, pointerIcon = buttonPointer)
+                if (desktop) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.hoverable(volumeHoverSource),
+                    ) {
+                        PIconButton(
+                            if (muted) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp,
+                            if (muted) "Unmute, volume 0%" else "Mute, volume ${(volume * 100).toInt()}%",
+                            onMute,
+                            interactionSource = volumeFocusSource,
+                            pointerIcon = buttonPointer,
+                        )
+                        AnimatedVisibility(
+                            visible = volumeHovered || volumeFocused,
+                            enter = expandHorizontally(tween(OmMotion.Fast, easing = OmMotion.EaseOut)) + fadeIn(tween(OmMotion.Fast)),
+                            exit = shrinkHorizontally(tween(OmMotion.Fast, easing = OmMotion.EaseOut)) + fadeOut(tween(OmMotion.Fast)),
+                        ) {
+                            // 0..200%; above 100% is software boost (warning colour).
+                            Slider(
+                                value = volume, onValueChange = onVolume, valueRange = 0f..2f,
+                                modifier = Modifier.width(112.dp)
+                                    .semantics { contentDescription = "Volume ${(volume * 100).toInt()}%" },
+                                interactionSource = volumeFocusSource,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = c.onVideo,
+                                    activeTrackColor = if (volume > 1f) c.warning else c.primary,
+                                    inactiveTrackColor = c.onVideo.copy(alpha = 0.3f),
+                                ),
+                            )
+                        }
+                    }
+                }
+                if (!compact) Spacer(Modifier.width(OmSpace.s2))
+                Text(
+                    "${formatTime(st.positionMs)} / ${formatTime(st.durationMs)}",
+                    color = c.onVideo, fontSize = 13.sp, style = Tnum, maxLines = 1,
                 )
+                if (!compact) {
+                    Spacer(Modifier.weight(1f))
+                    playerActions()
+                }
             }
-            Spacer(Modifier.width(OmSpace.s2))
-            Text(
-                "${formatTime(st.positionMs)} / ${formatTime(st.durationMs)}",
-                color = c.onVideo, fontSize = 13.sp, style = Tnum, maxLines = 1,
-            )
-            Spacer(Modifier.weight(1f))
-            PIconButton(Icons.Rounded.AspectRatio, "Scale mode: ${scaleMode.name}", onScale)
-            PTextButton(speedLabel(speed), "Playback speed", onSpeed, active = speed != 1f)
-            PIconButton(Icons.Rounded.Subtitles, "Subtitles", onSubs)
-            PIconButton(Icons.Rounded.Audiotrack, "Audio tracks", onAudio)
-            if (desktop) PIconButton(if (fullscreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, if (fullscreen) "Exit full screen" else "Full screen", onFullscreen)
-            PIconButton(Icons.Rounded.MoreVert, "More", onMore)
+            if (compact) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                playerActions()
+            }
         }
     }
 }
@@ -201,7 +264,6 @@ internal fun SeekBar(
                 contentDescription = "Seek"
                 stateDescription = "${formatTime(positionMs)} of ${formatTime(durationMs)}"
             }
-            .pointerHoverIcon(PointerIcon.Hand)
             .pointerInput(Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown()

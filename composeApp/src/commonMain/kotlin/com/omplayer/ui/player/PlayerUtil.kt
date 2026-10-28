@@ -70,22 +70,24 @@ internal fun delayLabel(ms: Long): String = when {
     else -> "$ms ms"
 }
 
-/** Player click: hand cursor, circular hover tint over video, 0.97 press scale (140 ms ease-out). */
+/** Player control with circular hover tint and 0.97 press scale (140 ms ease-out). */
 internal fun Modifier.pressable(
     enabled: Boolean = true,
     role: Role = Role.Button,
     hoverShape: Shape = CircleShape,
+    interactionSource: MutableInteractionSource? = null,
+    pointerIcon: PointerIcon = PointerIcon.Default,
     onClick: () -> Unit,
 ): Modifier = composed {
-    val src = remember { MutableInteractionSource() }
+    val src = interactionSource ?: remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
     val hovered by src.collectIsHoveredAsState()
     val s by animateFloatAsState(if (pressed) OmMotion.PressScale else 1f, tween(OmMotion.Press, easing = OmMotion.EaseOut))
     val tint by animateFloatAsState(
-        when { !enabled -> 0f; pressed -> 0.22f; hovered -> 0.14f; else -> 0f }, tween(OmMotion.Fast),
+        when { !enabled -> 0f; pressed -> 0.28f; hovered -> 0.20f; else -> 0f }, tween(OmMotion.Fast),
     )
     this.graphicsLayer { scaleX = s; scaleY = s }
-        .then(if (enabled) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
+        .then(if (enabled) Modifier.pointerHoverIcon(pointerIcon) else Modifier)
         .hoverable(src, enabled)
         .background(Color.White.copy(alpha = tint), hoverShape)
         .clickable(interactionSource = src, indication = null, enabled = enabled, role = role, onClick = onClick)
@@ -103,10 +105,12 @@ internal fun PIconButton(
     active: Boolean = false,
     enabled: Boolean = true,
     filled: Color? = null,
+    interactionSource: MutableInteractionSource? = null,
+    pointerIcon: PointerIcon = PointerIcon.Default,
 ) {
     val c = OmTheme.colors
     Box(
-        modifier.size(size).pressable(enabled = enabled, onClick = onClick).clip(CircleShape)
+        modifier.size(size).pressable(enabled = enabled, interactionSource = interactionSource, pointerIcon = pointerIcon, onClick = onClick).clip(CircleShape)
             .background(filled ?: if (active) c.primarySoft else Color.Transparent),
         contentAlignment = Alignment.Center,
     ) {
@@ -115,10 +119,16 @@ internal fun PIconButton(
 }
 
 @Composable
-internal fun PTextButton(label: String, desc: String, onClick: () -> Unit, active: Boolean = false) {
+internal fun PTextButton(
+    label: String,
+    desc: String,
+    onClick: () -> Unit,
+    active: Boolean = false,
+    pointerIcon: PointerIcon = PointerIcon.Default,
+) {
     val c = OmTheme.colors
     Box(
-        Modifier.height(OmSpace.tap).pressable(onClick = onClick).clip(RoundedCornerShape(50))
+        Modifier.height(OmSpace.tap).pressable(pointerIcon = pointerIcon, onClick = onClick).clip(RoundedCornerShape(50))
             .background(if (active) c.primarySoft else Color.Transparent).padding(horizontal = OmSpace.s3),
         contentAlignment = Alignment.Center,
     ) {

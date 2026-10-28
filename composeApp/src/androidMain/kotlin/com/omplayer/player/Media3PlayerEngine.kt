@@ -1,8 +1,11 @@
 package com.omplayer.player
 
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
+import android.os.SystemClock
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem as XItem
@@ -12,6 +15,9 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
+import androidx.media3.common.VideoSize
+import androidx.media3.exoplayer.DecoderCounters
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -36,15 +42,13 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    /** Exposed for the Android VideoSurface. */
-    val player: ExoPlayer = ExoPlayer.Builder(
-        appContext,
-        DefaultRenderersFactory(appContext)
-            .setEnableDecoderFallback(true)
-            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER),
-    ).build()
-
-    private val session: MediaSession = MediaSession.Builder(appContext, player).setId("om_player").build()
+    /**
+     * ExoPlayer + MediaSession are built on first use (or by [prewarm] after the first frame) so app startup
+     * doesn't wait ~150 ms for them on the main thread. Exposed for the Android VideoSurface.
+     */
+    private val playerLazy = lazy { buildPlayer() }
+    val player: ExoPlayer by playerLazy
+    private var session: MediaSession? = null
 
     private val _state = MutableStateFlow(PlayerState())
     override val state: StateFlow<PlayerState> = _state
@@ -59,6 +63,7 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
     private var enhancer: LoudnessEnhancer? = null
     private var ticker: Job? = null
     private var released = false
+    private var openedAtMs = 0L
 
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
@@ -73,7 +78,35 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
         }
     }
 
-    init { player.addListener(listener) }
+    private fun buildPlayer(): ExoPlayer {
+        val player = ExoPlayer.Builder(
+            appContext,
+            DefaultRenderersFactory(appContext)
+                .setEnableDecoderFallback(true)
+                .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER),
+        ).build()
+        player.addListener(listener)
+        if (appContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+            player.addAnalyticsListener(object : AnalyticsListener {
+                override fun onVideoSizeChanged(eventTime: AnalyticsListener.EventTime, videoSize: VideoSize) {
+                    Log.d("OMVideo", "decoded=${videoSize.width}x${videoSize.height} pixelRatio=${videoSize.pixelWidthHeightRatio} metadataRotation=${player.videoFormat?.rotationDegrees}")
+                }
+
+                override fun onRenderedFirstFrame(eventTime: AnalyticsListener.EventTime, output: Any, renderTimeMs: Long) {
+                    Log.d("OMVideo", "firstFrame elapsedSinceOpenMs=${SystemClock.elapsedRealtime() - openedAtMs}")
+                }
+
+                override fun onVideoDisabled(eventTime: AnalyticsListener.EventTime, decoderCounters: DecoderCounters) {
+                    Log.d("OMVideo", "rendered=${decoderCounters.renderedOutputBufferCount} dropped=${decoderCounters.droppedBufferCount} skipped=${decoderCounters.skippedOutputBufferCount}")
+                }
+            })
+        }
+        session = MediaSession.Builder(appContext, player).setId("om_player").build()
+        return player
+    }
+
+    /** Build the player now (call after the first frame) so the first open doesn't pay for it. */
+    fun prewarm() { if (!released) player }
 
     private fun friendly(e: PlaybackException): String = when (e.errorCode) {
         PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND -> "File not found. It may have been moved or deleted."
@@ -166,6 +199,7 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
         .build()
 
     override fun open(item: MediaItem, startMs: Long) {
+        openedAtMs = SystemClock.elapsedRealtime()
         current = item
         extraSubs.clear()
         error = null
@@ -253,7 +287,7 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
     }
 
     override fun stop() {
-        player.stop(); player.clearMediaItems()
+        if (playerLazy.isInitialized()) { player.stop(); player.clearMediaItems() }
         current = null; extraSubs.clear(); error = null
         _state.value = PlayerState(volume = volume)
     }
@@ -264,7 +298,8 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
         ticker?.cancel()
         scope.cancel()
         releaseEnhancer()
-        session.release()
+        if (!playerLazy.isInitialized()) return
+        session?.release()
         player.removeListener(listener)
         player.release()
     }

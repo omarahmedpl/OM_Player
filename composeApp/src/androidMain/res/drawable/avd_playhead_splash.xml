@@ -1,0 +1,5 @@
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/ic_splash_playhead">
+    <target android:name="playhead_arc" android:animation="@animator/splash_playhead_arc" />
+    <target android:name="playhead_dot" android:animation="@animator/splash_playhead_dot" />
+</animated-vector>

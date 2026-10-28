@@ -120,8 +120,8 @@ fun LibraryRoot(
     var notice by remember { mutableStateOf<String?>(null) }
     var info by remember { mutableStateOf<MediaItem?>(null) }
 
-    val folders = (state as? LibraryState.Ready)?.folders.orEmpty()
-    val allItems = folders.flatMap { it.items }
+    val folders = remember(state) { (state as? LibraryState.Ready)?.folders.orEmpty() }
+    val allItems = remember(folders) { folders.flatMap { it.items } }
     val searching = query.isNotBlank()
 
     val actions = remember(onPlay) { ItemActions(onPlay, { info = it }, { notice = it }) }

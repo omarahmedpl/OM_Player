@@ -28,6 +28,8 @@ class FrameSink {
     private var h = 0
     @Volatile var image: Image? = null
         private set
+    @Volatile private var lastPublishNanos = 0L
+    private val minPublishIntervalNanos = 16_000_000L
     /** Bumped for every frame; collect to redraw. */
     val tick = MutableStateFlow(0)
 
@@ -38,12 +40,17 @@ class FrameSink {
     }
 
     internal fun push(src: ByteBuffer) {
+        // The Compose surface cannot present faster than a 60 Hz display. Skip excess
+        // decoder callbacks before copying and wrapping a full-resolution frame.
+        val now = System.nanoTime()
+        if (now - lastPublishNanos < minPublishIntervalNanos) return
         val img = synchronized(lock) {
             if (w == 0 || buf.isEmpty()) return
             src.rewind()
             src.get(buf, 0, minOf(buf.size, src.remaining()))
             Image.makeRaster(ImageInfo(w, h, ColorType.BGRA_8888, ColorAlphaType.OPAQUE), buf, w * 4)
         }
+        lastPublishNanos = now
         image = img
         tick.update { it + 1 }
     }

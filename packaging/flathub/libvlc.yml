@@ -1,0 +1,38 @@
+# libVLC 3.0.24 for OM Player's desktop engine (vlcj). Built headless: OM Player renders frames itself through
+# vlcj callbacks, so VLC's own GUI, Lua, skins, and X/Wayland video outputs aren't needed.
+name: libvlc
+buildsystem: autotools
+build-options:
+  env:
+    BUILDCC: /usr/bin/gcc -std=gnu99   # VLC 3.x's configure can't detect a C99 compiler on newer SDKs
+config-opts:
+  - --disable-static
+  - --disable-vlc          # no vlc binary, library only
+  - --disable-qt
+  - --disable-skins2
+  - --disable-lua
+  - --disable-ncurses
+  - --disable-a52
+  - --disable-mad
+  - --disable-chromecast
+  - --disable-libgcrypt
+  - --disable-xcb
+  - --disable-wayland
+  - --disable-vdpau
+  - --disable-dbus-control
+  - --disable-update-check
+  - --enable-pulse
+  - --enable-avcodec
+  - --enable-avformat
+  - --enable-swscale
+  - --enable-freetype
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - '*.la'
+  - /share/man
+  - /share/doc
+sources:
+  - type: archive
+    url: https://download.videolan.org/pub/videolan/vlc/3.0.24/vlc-3.0.24.tar.xz
+    sha256: e7cab503d1d7d5849b89d2cf0e1ee60d0ef6d012407791b644b9cfc0cc225fdf

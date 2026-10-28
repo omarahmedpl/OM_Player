@@ -2,6 +2,10 @@
 
 package com.omplayer
 
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -87,12 +91,13 @@ fun main(args: Array<String>) {
         val engine: PlayerEngine = remember {
             runCatching { VlcjPlayerEngine() }.getOrElse { vlcOk = false; FakePlayerEngine() }
         }
+        val platform = remember { DesktopPlatformActions(windowState) }
         val deps = remember {
             AppDeps(
                 repository = FileSystemMediaRepository(),
                 progress = JsonFileProgressStore(),
                 engine = engine,
-                platform = DesktopPlatformActions(windowState),
+                platform = platform,
             )
         }
         val openRequests = remember { openChannel.receiveAsFlow() }
@@ -129,8 +134,14 @@ fun main(args: Array<String>) {
                 title = "OM Player",
                 icon = PlayheadPainter,
                 state = windowState,
+                // Fallback: Esc leaves fullscreen even when no player control has focus (switching placement can drop
+                // Compose focus on Windows). onKeyEvent bubbles, so the player still closes an open panel first.
+                onKeyEvent = { e ->
+                    e.type == KeyEventType.KeyDown && e.key == Key.Escape && platform.exitFullscreenIfActive()
+                },
             ) {
                 window.minimumSize = java.awt.Dimension(960, 600)
+                platform.window = window
                 Box(
                     Modifier.fillMaxSize().dragAndDropTarget(
                         shouldStartDragAndDrop = { it.dragData() is DragData.FilesList },

@@ -1,5 +1,11 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
+
+// Release signing comes from the git-ignored local.properties (omplayer.release.*); never from tracked files.
+val localProps = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+}
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -60,8 +66,27 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    signingConfigs {
+        localProps.getProperty("omplayer.release.storeFile")?.let { path ->
+            create("release") {
+                storeFile = file(path)
+                storePassword = localProps.getProperty("omplayer.release.storePassword")
+                keyAlias = localProps.getProperty("omplayer.release.keyAlias")
+                keyPassword = localProps.getProperty("omplayer.release.keyPassword")
+            }
+        }
+    }
     buildTypes {
-        getByName("release") { isMinifyEnabled = false }
+        getByName("release") {
+            isMinifyEnabled = false
+            signingConfigs.findByName("release")?.let { signingConfig = it }
+        }
+        // Release-like build for performance measurement on emulators/devices (debug key, not debuggable).
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+        }
     }
     packaging {
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
@@ -77,6 +102,15 @@ compose.desktop {
             packageVersion = "1.0.0"
             description = "OM Player: an ad-free video player"
             vendor = "OM Player"
+            // vlcj loads libVLC via JNA; ship the full runtime so no JVM module is missing at run time.
+            includeAllModules = true
+            linux {
+                iconFile.set(project.file("icons/om-player.png"))
+                debMaintainer = "0omarahmed73@gmail.com"
+                menuGroup = "AudioVideo;Video;Player"
+                appCategory = "video"
+                shortcut = true
+            }
         }
     }
 }

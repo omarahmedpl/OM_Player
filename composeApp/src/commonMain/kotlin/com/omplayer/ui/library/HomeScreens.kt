@@ -34,6 +34,7 @@ import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -142,7 +143,7 @@ internal fun HomeContent(
     onRefresh: () -> Unit,
 ) {
     val deps = LocalAppDeps.current
-    val videoFolders = folders.filter { it.videos().isNotEmpty() }
+    val videoFolders = remember(folders) { folders.filter { folder -> folder.items.any { !it.isAudio } } }
     if (videoFolders.isEmpty()) {
         EmptyState(
             Icons.Rounded.VideoLibrary, "No videos yet", "Add video files to your device, then refresh.",
@@ -150,9 +151,9 @@ internal fun HomeContent(
         )
         return
     }
-    val all = videoFolders.flatMap { it.videos() }
+    val all = remember(videoFolders) { videoFolders.flatMap { folder -> folder.items.filter { !it.isAudio } } }
+    val byId = remember(all) { all.associateBy { it.id } }
     val recent = if (showContinue) {
-        val byId = all.associateBy { it.id }
         deps.progress.recentIds().mapNotNull { byId[it] }
     } else emptyList()
     val pad = contentPad()
@@ -187,7 +188,7 @@ private fun ContinueCard(item: MediaItem, queue: List<MediaItem>, actions: ItemA
     val frac = if (item.durationMs > 0) pos.toFloat() / item.durationMs else 0f
     val left = ((item.durationMs - pos).coerceAtLeast(0) + 59_999) / 60_000
     Column(modifier.width(220.dp).pressable({ actions.play(item, queue) })) {
-        ThumbnailPlaceholder(item.id, Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(OmRadius.md))) {
+        ThumbnailPlaceholder(item.id, Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(OmRadius.md)), uri = item.uri) {
             if (item.durationMs > 0) MetaChip(formatDuration(item.durationMs), Modifier.align(Alignment.BottomEnd).padding(6.dp))
             ProgressBar(frac, Modifier.align(Alignment.BottomStart), height = 4.dp)
         }

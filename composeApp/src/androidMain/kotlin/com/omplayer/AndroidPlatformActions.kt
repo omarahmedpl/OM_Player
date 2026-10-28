@@ -10,7 +10,10 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.omplayer.player.PlayerEngine
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
@@ -23,7 +26,14 @@ class AndroidPlatformActions(
 
     private val pip = MutableStateFlow(false)
     override val inPictureInPicture: StateFlow<Boolean> = pip.asStateFlow()
-    fun onPictureInPictureChanged(active: Boolean) { pip.value = active }
+    private val pipDismissed = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    override val pictureInPictureDismissed: Flow<Unit> = pipDismissed.asSharedFlow()
+
+    /** [dismissed] = PiP ended while the Activity is stopped (user closed the window), as opposed to expanding it. */
+    fun onPictureInPictureChanged(active: Boolean, dismissed: Boolean = false) {
+        pip.value = active
+        if (!active && dismissed) pipDismissed.tryEmit(Unit)
+    }
 
     private val controller get() = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
 
@@ -31,6 +41,14 @@ class AndroidPlatformActions(
         val lp = activity.window.attributes
         lp.screenBrightness = value?.coerceIn(0.01f, 1f) ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
         activity.window.attributes = lp
+    }
+
+    override fun setScreenOrientation(orientation: ScreenOrientation) {
+        activity.requestedOrientation = when (orientation) {
+            ScreenOrientation.Auto -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            ScreenOrientation.Landscape -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            ScreenOrientation.Portrait -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+        }
     }
 
     override fun setLandscape(enabled: Boolean) {

@@ -1,0 +1,46 @@
+# Flathub manifest. TODO before submitting: publish the v1.0.0 release archive and fill in its sha256.
+# The app archive is "om-player-<version>-linux-x86_64.tar.gz" = the Compose Desktop distributable folder
+# (./gradlew :composeApp:createDistributable → composeApp/build/compose/binaries/main/app/om-player), attached to
+# a GitHub release. Flathub forbids local "dir" sources; see local-test.yml for building on your machine.
+id: io.github.omarahmedpl.OMPlayer
+runtime: org.freedesktop.Platform
+runtime-version: "25.08"
+sdk: org.freedesktop.Sdk
+command: om-player
+finish-args:
+  - --share=ipc
+  - --socket=x11            # Compose Desktop (AWT) runs via XWayland
+  - --socket=pulseaudio
+  - --device=dri            # GPU rendering (Skiko OpenGL)
+  - --share=network         # network streams (http/https/rtsp)
+  - --filesystem=xdg-videos:ro
+  - --filesystem=xdg-music:ro
+  - --filesystem=xdg-download:ro
+modules:
+  - libvlc.yml
+  - name: om-player
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/om-player && cp -a om-player/. /app/om-player/
+      # VLC plugin cache; generated here because libVLC's plugins are stripped after its own module finishes
+      - /app/lib/vlc/vlc-cache-gen /app/lib/vlc/plugins
+      - install -Dm755 om-player.sh /app/bin/om-player
+      - install -Dm644 io.github.omarahmedpl.OMPlayer.desktop /app/share/applications/io.github.omarahmedpl.OMPlayer.desktop
+      - install -Dm644 io.github.omarahmedpl.OMPlayer.metainfo.xml /app/share/metainfo/io.github.omarahmedpl.OMPlayer.metainfo.xml
+      - install -Dm644 io.github.omarahmedpl.OMPlayer.png /app/share/icons/hicolor/512x512/apps/io.github.omarahmedpl.OMPlayer.png
+      - install -Dm644 io.github.omarahmedpl.OMPlayer.svg /app/share/icons/hicolor/scalable/apps/io.github.omarahmedpl.OMPlayer.svg
+    sources:
+      - type: archive
+        url: https://github.com/omarahmedpl/OM_Player/releases/download/v1.0.0/om-player-1.0.0-linux-x86_64.tar.gz
+        sha256: TODO
+        dest: om-player
+      - type: file
+        path: om-player.sh
+      - type: file
+        path: io.github.omarahmedpl.OMPlayer.desktop
+      - type: file
+        path: io.github.omarahmedpl.OMPlayer.metainfo.xml
+      - type: file
+        path: io.github.omarahmedpl.OMPlayer.png
+      - type: file
+        path: io.github.omarahmedpl.OMPlayer.svg

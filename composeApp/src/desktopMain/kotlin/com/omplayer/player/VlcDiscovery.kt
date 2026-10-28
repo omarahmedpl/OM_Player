@@ -8,6 +8,7 @@ import uk.co.caprica.vlcj.factory.discovery.strategy.NativeDiscoveryStrategy
 /** Linux fallback for systems that ship only the versioned libvlc.so.5 (no dev symlink). */
 private class LinuxVersionedStrategy : NativeDiscoveryStrategy {
     private val dirs = listOf(
+        "/app/lib",   // Flatpak/Flathub build: libVLC is bundled into the app
         "/usr/lib/x86_64-linux-gnu", "/usr/lib/aarch64-linux-gnu", "/usr/lib64", "/usr/lib",
         "/usr/local/lib", "/var/lib/flatpak/exports/lib", "/snap/vlc/current/usr/lib",
     )

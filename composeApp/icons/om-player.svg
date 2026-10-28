@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- OM Player Playhead mark on a graphite tile (matches the Android launcher icon) -->
+  <rect width="512" height="512" rx="112" fill="#1A1A22"/>
+  <g transform="translate(256 256) scale(3.4) translate(-50 -50)">
+    <circle cx="50" cy="50" r="34" fill="none" stroke="#2E2E3A" stroke-width="12"/>
+    <circle cx="50" cy="50" r="34" fill="none" stroke="#E11D48" stroke-width="12" stroke-linecap="round" stroke-dasharray="160 214" transform="rotate(-90 50 50)"/>
+    <circle cx="16" cy="50" r="9" fill="#FFFFFF"/>
+  </g>
+</svg>

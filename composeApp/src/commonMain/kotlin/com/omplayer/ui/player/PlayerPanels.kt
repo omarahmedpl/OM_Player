@@ -1,13 +1,10 @@
 package com.omplayer.ui.player
 
-import androidx.compose.ui.input.pointer.pointerHoverIcon
-import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -55,7 +52,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -89,8 +85,7 @@ private fun SidePanel(title: String, onDismiss: () -> Unit, content: @Composable
         Row(
             Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(widthDp)
                 .graphicsLayer { translationX = x.value }
-                .background(c.surface1)
-                .pointerInput(Unit) { detectTapGestures { } },
+                .background(c.surface1),
         ) {
             Box(Modifier.width(1.dp).fillMaxHeight().background(c.hairline))
             Column(Modifier.weight(1f).fillMaxHeight()) {
@@ -120,9 +115,9 @@ private fun BottomSheet(title: String, onDismiss: () -> Unit, content: @Composab
     }
     LaunchedEffect(heightPx) {
         if (heightPx > 0f && !opened) {
-            opened = true
             offset.snapTo(heightPx)
             offset.animateTo(0f, tween(OmMotion.Sheet, easing = OmMotion.EaseDrawer))
+            opened = true
         }
     }
     val drag = rememberDraggableState { d -> scope.launch { offset.snapTo((offset.value + d).coerceAtLeast(0f)) } }
@@ -137,8 +132,7 @@ private fun BottomSheet(title: String, onDismiss: () -> Unit, content: @Composab
                 .offset { IntOffset(0, offset.value.roundToInt()) }
                 .onSizeChanged { heightPx = it.height.toFloat() }
                 .clip(RoundedCornerShape(topStart = OmRadius.xl, topEnd = OmRadius.xl))
-                .background(c.surface1)
-                .pointerInput(Unit) { detectTapGestures { } },
+                .background(c.surface1),
         ) {
             Column(
                 Modifier.fillMaxWidth().draggable(drag, Orientation.Vertical, onDragStopped = { v ->
@@ -162,7 +156,7 @@ private fun BottomSheet(title: String, onDismiss: () -> Unit, content: @Composab
 internal fun OptionRow(label: String, selected: Boolean, onClick: () -> Unit, sub: String? = null) {
     val c = OmTheme.colors
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 48.dp).pointerHoverIcon(PointerIcon.Hand).clickable(role = Role.RadioButton, onClick = onClick)
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.RadioButton, onClick = onClick)
             .padding(horizontal = OmSpace.s4, vertical = OmSpace.s2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -242,7 +236,7 @@ internal fun SubtitlePanel(
     st.subtitleTracks.forEach { OptionRow(it.label, it.selected, { onSelect(it.id) }) }
     Text(
         "Add subtitle file…", color = c.accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).pointerHoverIcon(PointerIcon.Hand).clickable(role = Role.Button, onClick = onAddFile)
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onAddFile)
             .padding(horizontal = OmSpace.s4, vertical = OmSpace.s3),
     )
     SectionLabel("SIZE  ·  ${(scale * 100).roundToInt()}%")
@@ -317,12 +311,12 @@ internal fun MorePanel(
     SectionLabel("PLAYBACK")
     if (canPip) Text(
         "Picture in picture", color = c.text, fontSize = 15.sp,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).pointerHoverIcon(PointerIcon.Hand).clickable(role = Role.Button, onClick = onPip)
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onPip)
             .padding(horizontal = OmSpace.s4, vertical = OmSpace.s3),
     )
     if (onShortcuts != null) Text(
         "Keyboard shortcuts", color = c.text, fontSize = 15.sp,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).pointerHoverIcon(PointerIcon.Hand).clickable(role = Role.Button, onClick = onShortcuts)
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onShortcuts)
             .padding(horizontal = OmSpace.s4, vertical = OmSpace.s3),
     )
     Text(
@@ -333,14 +327,14 @@ internal fun MorePanel(
 }
 
 private val shortcuts = listOf(
-    "Space / K" to "Play / pause",
+    "Space" to "Play / pause",
     "J / L" to "Back / forward (seek step)",
     "← / →" to "Back / forward 5 s",
     "↑ / ↓" to "Volume ±5%",
     "M" to "Mute",
     "[ / ]" to "Speed −/+ 0.25",
     "F" to "Full screen",
-    "Esc" to "Close panel, exit full screen, close player",
+    "Esc" to "Close panel or exit full screen",
     "?" to "This list",
 )
 

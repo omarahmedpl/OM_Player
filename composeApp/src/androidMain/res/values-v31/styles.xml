@@ -1,0 +1,8 @@
+<resources>
+    <style name="Theme.OmPlayer" parent="@style/OmPlayerBase">
+        <item name="android:windowSplashScreenBackground">@color/om_splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/avd_playhead_splash</item>
+        <item name="android:windowSplashScreenAnimationDuration">860</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/om_splash_background</item>
+    </style>
+</resources>

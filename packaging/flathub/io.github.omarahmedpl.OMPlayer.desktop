@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=OM Player
+GenericName=Video Player
+Comment=Ad-free video and music player
+Exec=om-player %f
+Icon=io.github.omarahmedpl.OMPlayer
+Terminal=false
+Categories=AudioVideo;Video;Player;
+MimeType=video/mp4;video/x-matroska;video/webm;video/quicktime;video/x-msvideo;video/mpeg;video/x-flv;video/3gpp;audio/mpeg;audio/flac;audio/ogg;audio/mp4;audio/x-wav;
+Keywords=video;movie;player;subtitles;mkv;mp4;
+StartupWMClass=com-omplayer-MainKt

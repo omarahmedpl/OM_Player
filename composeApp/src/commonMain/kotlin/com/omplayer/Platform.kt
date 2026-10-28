@@ -7,11 +7,16 @@ import com.omplayer.data.MediaRepository
 import com.omplayer.data.ProgressStore
 import com.omplayer.player.PlayerEngine
 import com.omplayer.player.ScaleMode
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 enum class FormFactor { Phone, Desktop }
+
+/** Requested screen orientation while the player is open. Auto follows the device/system setting. */
+enum class ScreenOrientation { Auto, Landscape, Portrait }
 
 /** Platform hooks the shared UI may call. Every method is safe to call on any platform (no-op where unsupported). */
 interface PlatformActions {
@@ -22,11 +27,17 @@ interface PlatformActions {
     fun setFullscreen(enabled: Boolean) {}
     /** Lock rotation to landscape (true) or let it follow the sensor/system (false). */
     fun setLandscape(enabled: Boolean) {}
+    /** Rotate the whole screen (Android). Controls turn with it; no-op on desktop. */
+    fun setScreenOrientation(orientation: ScreenOrientation) {}
     fun keepScreenOn(enabled: Boolean) {}
     /** Open a file picker for a single media file; result arrives via the callback (null = cancelled). */
     fun pickMediaFile(onResult: (uri: String?) -> Unit) { onResult(null) }
     /** True while the app runs in a picture-in-picture window; the player hides its controls. */
     val inPictureInPicture: StateFlow<Boolean> get() = NotInPip
+    /** Desktop: the window's real fullscreen state (it can also change outside the player, e.g. Esc at window level). */
+    val windowFullscreen: StateFlow<Boolean> get() = NotInPip
+    /** Emits when the user dismisses the PiP window (not when they expand it back). The player then stops and closes. */
+    val pictureInPictureDismissed: Flow<Unit> get() = emptyFlow()
 }
 
 private val NotInPip: StateFlow<Boolean> = MutableStateFlow(false).asStateFlow()
@@ -41,9 +52,18 @@ class AppDeps(
 
 val LocalAppDeps = staticCompositionLocalOf<AppDeps> { error("AppDeps not provided") }
 
-/** Draws the engine's video. Android: Media3 surface. Desktop: vlcj frames drawn into Compose. */
+/** Draws the engine's video. [transformed] describes the caller's manual video-layer transform,
+ * so Android can select a compatible surface. Media orientation metadata stays with the engine. */
 @Composable
-expect fun VideoSurface(engine: PlayerEngine, scaleMode: ScaleMode, zoom: Float, modifier: Modifier)
+expect fun VideoSurface(engine: PlayerEngine, scaleMode: ScaleMode, zoom: Float, modifier: Modifier, transformed: Boolean = false)
+
+/** Draws a bounded video preview when the platform can retrieve one; otherwise the caller's placeholder remains visible. */
+@Composable
+expect fun VideoThumbnail(uri: String, modifier: Modifier = Modifier)
+
+/** Draws embedded album artwork when available; the library keeps its music-note fallback otherwise. */
+@Composable
+expect fun AudioArtwork(uri: String, modifier: Modifier = Modifier)
 
 /**
  * System Back (Android back button/gesture). The most recently composed enabled handler wins,
@@ -51,3 +71,12 @@ expect fun VideoSurface(engine: PlayerEngine, scaleMode: ScaleMode, zoom: Float,
  */
 @Composable
 expect fun PlatformBackHandler(enabled: Boolean = true, onBack: () -> Unit)
+
+/**
+ * Hosts the player UI while fullscreen. Android renders [content] in place. Desktop/Linux renders it in its own
+ * borderless, screen-sized window: the system fullscreen state can't be left reliably there (GNOME/XWayland +
+ * OpenJDK re-applies it), so OM Player never enters it. [onExit] is called when that window is closed.
+ * Only the UI moves; the player's state and playback lifecycle stay with the caller.
+ */
+@Composable
+expect fun FullscreenHost(active: Boolean, onExit: () -> Unit, content: @Composable () -> Unit)

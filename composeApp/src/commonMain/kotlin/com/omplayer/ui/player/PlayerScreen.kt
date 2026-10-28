@@ -1,17 +1,24 @@
 package com.omplayer.ui.player
 
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeSource
+import kotlin.time.TimeMark
+import com.omplayer.ScreenOrientation
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.requiredHeight
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BrightnessMedium
@@ -38,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
@@ -59,6 +67,7 @@ import androidx.compose.ui.unit.sp
 import com.omplayer.AppSettings
 import com.omplayer.FormFactor
 import com.omplayer.LocalAppDeps
+import com.omplayer.FullscreenHost
 import com.omplayer.PlatformBackHandler
 import com.omplayer.VideoSurface
 import com.omplayer.data.LibraryState
@@ -134,7 +143,7 @@ private fun PlayerContent(
     var abB by remember(item.id) { mutableStateOf<Long?>(null) }
     var subScale by remember { mutableFloatStateOf(settings.subtitleScale) }
     var subBg by remember { mutableStateOf(settings.subtitleBackground) }
-    var fullscreen by remember { mutableStateOf(false) }
+    var fullscreen by remember { mutableStateOf(!desktop) }
     var brightness by remember { mutableFloatStateOf(0.5f) }
     var preMute by remember { mutableFloatStateOf(1f) }
     val focus = remember { FocusRequester() }
@@ -147,6 +156,15 @@ private fun PlayerContent(
     val step = settings.seekStepSec.coerceAtLeast(1)
 
     fun showOsd(text: String) { osdCounter++; osd = OsdMsg(text, osdCounter) }
+    // Rotate button turns the whole screen (Activity orientation); closing the player returns to Auto.
+    val windowSize = LocalWindowInfo.current.containerSize
+    fun rotateScreen() {
+        val toLandscape = windowSize.width <= windowSize.height
+        platform.setScreenOrientation(if (toLandscape) ScreenOrientation.Landscape else ScreenOrientation.Portrait)
+        showOsd(if (toLandscape) "Landscape" else "Portrait")
+    }
+    DisposableEffect(Unit) { onDispose { platform.setScreenOrientation(ScreenOrientation.Auto) } }
+
     fun poke() { interaction++; controlsVisible = true }
 
     // ---- engine lifecycle -------------------------------------------------------------------------------
@@ -166,13 +184,12 @@ private fun PlayerContent(
         while (st.isPlaying) { delay(5_000); saveProgress() }
     }
     DisposableEffect(Unit) {
-        if (!desktop) platform.setLandscape(true)
+        if (!desktop) platform.setFullscreen(true)
         onDispose {
             saveProgress()
-            if (!desktop) platform.setLandscape(false)
             platform.setPlayerBrightness(null)
             platform.keepScreenOn(false)
-            if (fullscreen) platform.setFullscreen(false)
+            platform.setFullscreen(false)
             engine.stop()
         }
     }
@@ -193,7 +210,13 @@ private fun PlayerContent(
 
     // Picture-in-picture: no chrome, no panels.
     val inPip by platform.inPictureInPicture.collectAsState()
-    LaunchedEffect(inPip) { if (inPip) { panel = null; controlsVisible = false } }
+    LaunchedEffect(inPip) {
+        if (inPip) { panel = null; controlsVisible = false } else poke()   // expanded back: show controls
+    }
+    // Closing the PiP window (not expanding it) stops playback and closes the player.
+    LaunchedEffect(Unit) {
+        platform.pictureInPictureDismissed.collect { engine.stop(); onClose() }
+    }
 
     // System Back: locked → just reveal the unlock button; else close the open panel first, then the player.
     PlatformBackHandler {
@@ -251,16 +274,36 @@ private fun PlayerContent(
         zoom = 1f
         showOsd(scaleName(scaleMode))
     }
-    fun toggleFullscreen() { fullscreen = !fullscreen; platform.setFullscreen(fullscreen) }
+    // While the desktop window switches placement, the OS re-creates the native frame and re-delivers the still-held
+    // key (F/Esc), which flipped fullscreen straight back. Ignore toggles until the switch has settled.
+    var lastFullscreenToggle by remember { mutableStateOf<TimeMark?>(null) }
+    fun toggleFullscreen() {
+        if (lastFullscreenToggle?.let { it.elapsedNow() < 500.milliseconds } == true) return
+        lastFullscreenToggle = TimeSource.Monotonic.markNow()
+        fullscreen = !fullscreen; platform.setFullscreen(fullscreen)
+    }
+    if (desktop) {
+        // Follow the window's real state (Esc is also handled at window level) and keep keyboard focus after the switch.
+        val windowFs by platform.windowFullscreen.collectAsState()
+        LaunchedEffect(windowFs) {
+            fullscreen = windowFs
+            delay(120)   // the UI may have just moved into/out of the fullscreen window
+            runCatching { focus.requestFocus() }
+        }
+    }
     fun changeSpeed(delta: Float) {
         val v = (((st.speed + delta) * 100).roundToInt() / 100f).coerceIn(0.25f, 4f)
         engine.setSpeed(v); showOsd("Speed ${speedLabel(v)}")
     }
     fun openPanel(p: PlayerPanel) { panel = p; poke() }
+    // One press closes the player. On phones the player is always fullscreen, so "exit fullscreen first" made Back
+    // and ← look dead on the first press (owner report). Only an open panel is dismissed first.
     fun handleClose() {
         when {
             panel != null -> panel = null
-            fullscreen -> toggleFullscreen()
+            // Desktop/Linux fullscreen lives in its own window while the main window is hidden (and its composition
+            // paused); leave it first so the main window can recompose and close the player in the same press.
+            desktop && fullscreen -> { fullscreen = false; platform.setFullscreen(false); onClose() }
             else -> onClose()
         }
     }
@@ -280,7 +323,7 @@ private fun PlayerContent(
         if (tap.count >= 1 && tap.zone == zone) {
             tap.count++
             tap.job?.cancel()
-            if (zone == 0) { if (tap.count == 2) togglePlay() }
+            if (zone == 0) poke()
             else {
                 engine.seekBy(zone * step * 1000L)
                 rippleCounter++
@@ -358,7 +401,7 @@ private fun PlayerContent(
         if (e.isCtrlPressed || e.isAltPressed || e.isMetaPressed) return false
         if (locked) return false
         when {
-            e.key == Key.Spacebar || e.key == Key.K -> togglePlay()
+            e.key == Key.Spacebar -> togglePlay()
             e.key == Key.J -> seekStep(-1, step)
             e.key == Key.L -> seekStep(1, step)
             e.key == Key.DirectionLeft -> seekStep(-1, 5)
@@ -369,7 +412,11 @@ private fun PlayerContent(
             e.key == Key.M -> toggleMute()
             e.key == Key.LeftBracket -> changeSpeed(-0.25f)
             e.key == Key.RightBracket -> changeSpeed(0.25f)
-            e.key == Key.Escape -> handleClose()
+            e.key == Key.Escape -> when {
+                panel != null -> panel = null
+                fullscreen -> toggleFullscreen()
+                else -> Unit
+            }
             (e.key == Key.Slash && e.isShiftPressed) || e.utf16CodePoint == '?'.code -> panel = if (panel == PlayerPanel.Shortcuts) null else PlayerPanel.Shortcuts
             else -> return false
         }
@@ -387,141 +434,148 @@ private fun PlayerContent(
     ).resolutionLabel
     val meta = listOfNotNull(folderName, resLabel.ifEmpty { null }, if (item.isAudio) null else settings.decoder.name).joinToString(" · ")
 
-    Box(
-        Modifier.fillMaxSize().background(c.bg)
-            .focusRequester(focus).focusable()
-            .onPreviewKeyEvent(::onKey)
-            .then(if (desktop) Modifier.desktopMoveAndWheel(
-                onMove = { if (!locked) poke() },
-                onWheel = { dy -> setVolume(st.volume + (if (dy < 0) 0.05f else -0.05f)) },
-            ) else Modifier),
-    ) {
-        // Video + gestures
+    FullscreenHost(active = desktop && fullscreen, onExit = { if (fullscreen) toggleFullscreen() }) {
         Box(
-            Modifier.fillMaxSize()
-                .then(
-                    if (desktop) Modifier.desktopClicks(
-                        onClick = { focus.requestFocus(); togglePlay(); poke() },
-                        onDoubleClick = { toggleFullscreen() },
-                    ) else if (locked) Modifier.playerGestures(
-                        GestureFlags(false, false, false, false, false), GestureCallbacks({ handleTap(it) }, { _, _, _ -> }, { _, _ -> }, {}, { _, _ -> }),
-                    ) else Modifier.playerGestures(gestureFlags, gestureCallbacks),
-                ),
+            Modifier.fillMaxSize().background(c.bg)
+                .focusRequester(focus).focusable()
+                .onPreviewKeyEvent(::onKey)
+                .then(if (desktop) Modifier.desktopMoveAndWheel(
+                    onMove = { if (!locked) poke() },
+                    onWheel = { dy -> setVolume(st.volume + (if (dy < 0) 0.05f else -0.05f)) },
+                ) else Modifier),
         ) {
-            VideoSurface(engine, scaleMode, zoom, Modifier.fillMaxSize())
-        }
-
-        if (st.isBuffering && st.error == null) {
-            CircularProgressIndicator(Modifier.align(Alignment.Center).size(72.dp), color = c.onVideo, strokeWidth = 3.dp)
-        }
-
-        // Double-tap ripple
-        ripple?.let { r ->
-            val a by animateFloatAsState(if (r.visible) 1f else 0f, tween(OmMotion.Fast, easing = OmMotion.EaseOut))
-            if (a > 0.01f) Box(
-                Modifier.align(if (r.side < 0) Alignment.CenterStart else Alignment.CenterEnd)
-                    .fillMaxSize(0.33f).graphicsLayer { alpha = a }.background(c.hairline, RoundedCornerShape(50)),
-                contentAlignment = Alignment.Center,
+            // Video + gestures
+            Box(
+                Modifier.fillMaxSize()
+                    .then(
+                        if (desktop) Modifier.desktopClicks(
+                            onClick = { focus.requestFocus(); poke() },
+                            onDoubleClick = { toggleFullscreen() },
+                        ) else if (locked) Modifier.playerGestures(
+                            GestureFlags(false, false, false, false, false), GestureCallbacks({ handleTap(it) }, { _, _, _ -> }, { _, _ -> }, {}, { _, _ -> }),
+                        ) else Modifier.playerGestures(gestureFlags, gestureCallbacks),
+                    ),
             ) {
-                androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    androidx.compose.material3.Icon(
-                        if (r.side < 0) Icons.Rounded.FastRewind else Icons.Rounded.FastForward, null, Modifier.size(32.dp), tint = c.onVideo,
-                    )
-                    Text("${r.seconds} s", color = c.onVideo, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, style = Tnum)
+                VideoSurface(engine, scaleMode, zoom, Modifier.fillMaxSize())
+            }
+
+            if (st.isBuffering && st.error == null) {
+                CircularProgressIndicator(Modifier.align(Alignment.Center).size(72.dp), color = c.onVideo, strokeWidth = 3.dp)
+            }
+
+            // Double-tap ripple
+            ripple?.let { r ->
+                val a by animateFloatAsState(if (r.visible) 1f else 0f, tween(OmMotion.Fast, easing = OmMotion.EaseOut))
+                if (a > 0.01f) Box(
+                    Modifier.align(if (r.side < 0) Alignment.CenterStart else Alignment.CenterEnd)
+                        .fillMaxSize(0.33f).graphicsLayer { alpha = a }.background(c.hairline, RoundedCornerShape(50)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        androidx.compose.material3.Icon(
+                            if (r.side < 0) Icons.Rounded.FastRewind else Icons.Rounded.FastForward, null, Modifier.size(32.dp), tint = c.onVideo,
+                        )
+                        Text("${r.seconds} s", color = c.onVideo, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, style = Tnum)
+                    }
                 }
             }
-        }
 
-        // Controls
-        if (controlsAlpha > 0.01f && !locked) {
-            Box(Modifier.fillMaxSize().graphicsLayer { alpha = controlsAlpha }.safeDrawingPadding()) {
-                TopBar(item.title, meta, onBack = ::handleClose, modifier = Modifier.align(Alignment.TopCenter))
-                if (st.error == null) CenterControl(st.isPlaying, st.ended, ::togglePlay, Modifier.align(Alignment.Center))
-                BottomBar(
-                    st = st, desktop = desktop, hasPrev = prevItem != null, hasNext = nextItem != null,
-                    scaleMode = scaleMode, speed = st.speed, fullscreen = fullscreen, muted = st.volume == 0f,
-                    onSeek = { engine.seekTo(it); poke() },
-                    onDragging = { seekDragging = it },
-                    onTogglePlay = ::togglePlay,
-                    onPrev = { prevItem?.let(onItemChange) },
-                    onNext = { nextItem?.let(onItemChange) },
-                    onScale = ::cycleScale,
-                    onSpeed = { openPanel(PlayerPanel.Speed) },
-                    onSubs = { openPanel(PlayerPanel.Subtitles) },
-                    onAudio = { openPanel(PlayerPanel.Audio) },
-                    onMore = { openPanel(PlayerPanel.More) },
-                    onLock = { locked = true; controlsVisible = false; unlockVisible = true; interaction++ },
-                    onFullscreen = ::toggleFullscreen,
-                    onMute = ::toggleMute,
-                    volume = st.volume,
-                    onVolume = { setVolume(it); poke() },
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                )
-            }
-        }
-
-        // Lock overlay
-        if (locked) {
-            val a by animateFloatAsState(if (unlockVisible) 1f else 0f, tween(OmMotion.Base, easing = OmMotion.EaseOut))
-            if (a > 0.01f) Box(Modifier.fillMaxSize().safeDrawingPadding().graphicsLayer { alpha = a }) {
-                PIconButton(
-                    Icons.Rounded.Lock, "Unlock controls", { locked = false; poke() },
-                    Modifier.align(Alignment.CenterEnd).padding(end = OmSpace.s4), size = 56.dp, filled = c.glass,
-                )
-            }
-        }
-
-        // Gesture HUD + OSD
-        val hudAlpha by animateFloatAsState(if (hud?.visible == true) 1f else 0f, tween(OmMotion.Press, easing = OmMotion.EaseOut))
-        if (hudAlpha > 0.01f) hud?.let {
-            HudPill(it.icon, it.text, it.fraction, it.boost, Modifier.align(Alignment.TopCenter).padding(top = 72.dp).graphicsLayer { alpha = hudAlpha })
-        }
-        val osdAlpha by animateFloatAsState(if (osd != null) 1f else 0f, tween(OmMotion.Press, easing = OmMotion.EaseOut))
-        if (osdAlpha > 0.01f) HudPill(null, osd?.text ?: osdLast, modifier = Modifier.align(Alignment.TopCenter).padding(top = 120.dp).graphicsLayer { alpha = osdAlpha })
-
-        // Error
-        st.error?.let { msg ->
-            Box(Modifier.align(Alignment.Center).clip(RoundedCornerShape(16.dp)).background(c.surface2).padding(OmSpace.s6).widthIn(max = 360.dp)) {
-                androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Can't play this video", color = c.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                    Text(msg, color = c.text2, fontSize = 14.sp, modifier = Modifier.padding(vertical = OmSpace.s2))
-                    Chip("Close", true, onClose)
+            // Controls
+            if (controlsAlpha > 0.01f && !locked) {
+                Box(Modifier.fillMaxSize().graphicsLayer { alpha = controlsAlpha }.safeDrawingPadding()) {
+                    TopBar(
+                        item.title, meta, onBack = ::handleClose,
+                        onRotate = if (desktop) null else ::rotateScreen,
+                        onExitFullscreen = if (desktop && fullscreen) ::toggleFullscreen else null,
+                        modifier = Modifier.align(Alignment.TopCenter),
+                    )
+                    if (st.error == null) CenterControl(st.isPlaying, st.ended, ::togglePlay, Modifier.align(Alignment.Center))
+                    BottomBar(
+                        st = st, desktop = desktop, hasPrev = prevItem != null, hasNext = nextItem != null,
+                        scaleMode = scaleMode, speed = st.speed, fullscreen = fullscreen, muted = st.volume == 0f,
+                        onSeek = { engine.seekTo(it); poke() },
+                        onDragging = { seekDragging = it },
+                        onTogglePlay = ::togglePlay,
+                        onPrev = { prevItem?.let(onItemChange) },
+                        onNext = { nextItem?.let(onItemChange) },
+                        onScale = ::cycleScale,
+                        onSpeed = { openPanel(PlayerPanel.Speed) },
+                        onSubs = { openPanel(PlayerPanel.Subtitles) },
+                        onAudio = { openPanel(PlayerPanel.Audio) },
+                        onMore = { openPanel(PlayerPanel.More) },
+                        onLock = { locked = true; controlsVisible = false; unlockVisible = true; interaction++ },
+                        onFullscreen = ::toggleFullscreen,
+                        onMute = ::toggleMute,
+                        volume = st.volume,
+                        onVolume = { setVolume(it); poke() },
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
                 }
             }
-        }
 
-        // Panels
-        panel?.let { p ->
-            PanelHost(
-                desktop = desktop,
-                title = when (p) {
-                    PlayerPanel.Audio -> "Audio"; PlayerPanel.Subtitles -> "Subtitles"; PlayerPanel.Speed -> "Speed"
-                    PlayerPanel.More -> "More"; PlayerPanel.Shortcuts -> "Keyboard shortcuts"
-                },
-                onDismiss = { panel = null },
-            ) {
-                when (p) {
-                    PlayerPanel.Audio -> AudioPanel(st) { engine.selectAudioTrack(it) }
-                    PlayerPanel.Subtitles -> SubtitlePanel(
-                        st, subScale, subBg,
-                        onSelect = { engine.selectSubtitleTrack(it) },
-                        onScale = { subScale = it },
-                        onBackground = { subBg = it },
-                        onDelay = { engine.setSubtitleDelay(it) },
-                        onAddFile = { platform.pickMediaFile { uri -> if (uri != null) engine.addSubtitle(uri) } },
+            // Lock overlay
+            if (locked) {
+                val a by animateFloatAsState(if (unlockVisible) 1f else 0f, tween(OmMotion.Base, easing = OmMotion.EaseOut))
+                if (a > 0.01f) Box(Modifier.fillMaxSize().safeDrawingPadding().graphicsLayer { alpha = a }) {
+                    PIconButton(
+                        Icons.Rounded.Lock, "Unlock controls", { locked = false; poke() },
+                        Modifier.align(Alignment.CenterEnd).padding(end = OmSpace.s4), size = 56.dp, filled = c.glass,
                     )
-                    PlayerPanel.Speed -> SpeedPanel(st.speed) { engine.setSpeed(it) }
-                    PlayerPanel.More -> MorePanel(
-                        sleep, { sleep = it; if (it != SleepMode.Off) showOsd("Sleep timer: ${it.label}") },
-                        abA, abB,
-                        onAbSet = { if (abA == null) abA = st.positionMs else if (st.positionMs > abA!!) abB = st.positionMs },
-                        onAbClear = { abA = null; abB = null },
-                        backgroundPlay = settings.backgroundPlay,
-                        canPip = !desktop,
-                        onPip = { panel = null; platform.enterPictureInPicture() },
-                        onShortcuts = if (desktop) ({ panel = PlayerPanel.Shortcuts }) else null,
-                    )
-                    PlayerPanel.Shortcuts -> ShortcutsPanel()
+                }
+            }
+
+            // Gesture HUD + OSD
+            val hudAlpha by animateFloatAsState(if (hud?.visible == true) 1f else 0f, tween(OmMotion.Press, easing = OmMotion.EaseOut))
+            if (hudAlpha > 0.01f) hud?.let {
+                HudPill(it.icon, it.text, it.fraction, it.boost, Modifier.align(Alignment.TopCenter).padding(top = 72.dp).graphicsLayer { alpha = hudAlpha })
+            }
+            val osdAlpha by animateFloatAsState(if (osd != null) 1f else 0f, tween(OmMotion.Press, easing = OmMotion.EaseOut))
+            if (osdAlpha > 0.01f) HudPill(null, osd?.text ?: osdLast, modifier = Modifier.align(Alignment.TopCenter).padding(top = 120.dp).graphicsLayer { alpha = osdAlpha })
+
+            // Error
+            st.error?.let { msg ->
+                Box(Modifier.align(Alignment.Center).clip(RoundedCornerShape(16.dp)).background(c.surface2).padding(OmSpace.s6).widthIn(max = 360.dp)) {
+                    androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Can't play this video", color = c.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Text(msg, color = c.text2, fontSize = 14.sp, modifier = Modifier.padding(vertical = OmSpace.s2))
+                        Chip("Close", true, onClose)
+                    }
+                }
+            }
+
+            // Panels
+            panel?.let { p ->
+                PanelHost(
+                    desktop = desktop,
+                    title = when (p) {
+                        PlayerPanel.Audio -> "Audio"; PlayerPanel.Subtitles -> "Subtitles"; PlayerPanel.Speed -> "Speed"
+                        PlayerPanel.More -> "More"; PlayerPanel.Shortcuts -> "Keyboard shortcuts"
+                    },
+                    onDismiss = { panel = null },
+                ) {
+                    when (p) {
+                        PlayerPanel.Audio -> AudioPanel(st) { engine.selectAudioTrack(it) }
+                        PlayerPanel.Subtitles -> SubtitlePanel(
+                            st, subScale, subBg,
+                            onSelect = { engine.selectSubtitleTrack(it) },
+                            onScale = { subScale = it },
+                            onBackground = { subBg = it },
+                            onDelay = { engine.setSubtitleDelay(it) },
+                            onAddFile = { platform.pickMediaFile { uri -> if (uri != null) engine.addSubtitle(uri) } },
+                        )
+                        PlayerPanel.Speed -> SpeedPanel(st.speed) { engine.setSpeed(it) }
+                        PlayerPanel.More -> MorePanel(
+                            sleep, { sleep = it; if (it != SleepMode.Off) showOsd("Sleep timer: ${it.label}") },
+                            abA, abB,
+                            onAbSet = { if (abA == null) abA = st.positionMs else if (st.positionMs > abA!!) abB = st.positionMs },
+                            onAbClear = { abA = null; abB = null },
+                            backgroundPlay = settings.backgroundPlay,
+                            canPip = !desktop,
+                            onPip = { panel = null; platform.enterPictureInPicture() },
+                            onShortcuts = if (desktop) ({ panel = PlayerPanel.Shortcuts }) else null,
+                        )
+                        PlayerPanel.Shortcuts -> ShortcutsPanel()
+                    }
                 }
             }
         }

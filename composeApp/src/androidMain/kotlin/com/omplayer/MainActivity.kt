@@ -1,14 +1,20 @@
 package com.omplayer
 
 import android.content.Intent
+import android.animation.ValueAnimator
+import android.content.pm.ApplicationInfo
 import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
+import android.os.SystemClock
+import android.util.Log
+import android.view.animation.DecelerateInterpolator
 import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import android.os.Bundle
 import com.omplayer.data.MediaStoreRepository
@@ -38,10 +44,53 @@ class MainActivity : ComponentActivity() {
         pickCallback?.invoke(uri?.toString()); pickCallback = null
     }
 
+    /** Debug-only startup marks, in ms since process start (tag OMStartup). */
+    private fun mark(label: String) {
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+            Log.d("OMStartup", "$label=${SystemClock.uptimeMillis() - android.os.Process.getStartUptimeMillis()}")
+        }
+    }
+
+    private var prewarmScheduled = false
+
+    /** Build the player on an idle main thread once startup visuals are done (never during the splash fade). */
+    private fun schedulePrewarm() {
+        if (prewarmScheduled) return
+        prewarmScheduled = true
+        android.os.Looper.myQueue().addIdleHandler {
+            engine.prewarm()
+            mark("prewarm")
+            false
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        mark("onCreate")
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= 31) {
+            splashScreen.setOnExitAnimationListener { splash ->
+                if (!ValueAnimator.areAnimatorsEnabled()) {
+                    splash.remove()
+                    schedulePrewarm()
+                    return@setOnExitAnimationListener
+                }
+                val exitStart = SystemClock.uptimeMillis()
+                // Fade only after Android signals that the first app frame is ready.
+                splash.animate().alpha(0f).setDuration(220)
+                    .setInterpolator(DecelerateInterpolator())
+                    .withEndAction {
+                        splash.remove()
+                        schedulePrewarm()
+                        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+                            Log.d("OMSplash", "exitMs=${SystemClock.uptimeMillis() - exitStart}")
+                        }
+                    }.start()
+            }
+        }
+        mark("splashSetup")
         engine = Media3PlayerEngine(this)
+        mark("engine")
         repository = MediaStoreRepository(this).also { r ->
             r.permissionRequester = { permissionLauncher.launch(r.permissionsToRequest()) }
         }
@@ -50,6 +99,7 @@ class MainActivity : ComponentActivity() {
             pickLauncher.launch(arrayOf("video/*", "audio/*"))
         }
         val deps = AppDeps(repository, PersistentProgressStore(this), engine, actions)
+        mark("deps")
 
         // Keep PiP params current; on API 31+ the system enters PiP itself when playing.
         lifecycleScope.launch {
@@ -64,6 +114,20 @@ class MainActivity : ComponentActivity() {
         }
         handleIntent(intent)
         setContent { App(deps, openRequests) }
+        mark("setContent")
+        window.decorView.viewTreeObserver.addOnDrawListener(object : android.view.ViewTreeObserver.OnDrawListener {
+            var done = false
+            override fun onDraw() {
+                if (done) return
+                done = true
+                mark("firstDraw")
+                window.decorView.post {
+                    window.decorView.viewTreeObserver.removeOnDrawListener(this)
+                    // No animated splash exit before API 31 (or a warm start): prewarm once idle after the first frame.
+                    if (Build.VERSION.SDK_INT < 31 || savedInstanceState != null) schedulePrewarm()
+                }
+            }
+        })
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -98,11 +162,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        actions.onPictureInPictureChanged(isInPictureInPictureMode)
+        // Dismissing the PiP window stops the Activity before this callback; expanding it keeps it started.
+        val dismissed = !isInPictureInPictureMode && !lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+        if (dismissed) engine.pause()
+        actions.onPictureInPictureChanged(isInPictureInPictureMode, dismissed)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        if (isFinishing) engine.release()
+        engine.release()
     }
 }

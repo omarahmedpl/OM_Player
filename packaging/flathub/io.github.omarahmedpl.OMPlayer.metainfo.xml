@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- TODO before submitting: add the two screenshots under packaging/flathub/screenshots/ and push them. -->
+<component type="desktop-application">
+  <id>io.github.omarahmedpl.OMPlayer</id>
+  <name>OM Player</name>
+  <summary>Ad-free video player with gestures and keyboard shortcuts</summary>
+  <developer id="io.github.omarahmedpl">
+    <name>Omar Ahmed</name>
+  </developer>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <description>
+    <p>OM Player is a fast, ad-free media player for your local videos and music. No account, no online feed, no tracking.</p>
+    <ul>
+      <li>Plays nearly every format through VLC's engine: MKV, MP4, WebM, AVI, MOV and more</li>
+      <li>Library of your Videos, Music and Downloads folders with thumbnails and Continue watching</li>
+      <li>Resumes every video where you left off</li>
+      <li>Subtitles with size, background and sync offset that survives seeking</li>
+      <li>Playback speed from 0.25× to 4×, A-B repeat and a sleep timer</li>
+      <li>Volume boost up to 200%</li>
+      <li>Full keyboard shortcuts, drag and drop, and a distraction-free fullscreen</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.omarahmedpl.OMPlayer.desktop</launchable>
+  <icon type="remote">https://raw.githubusercontent.com/omarahmedpl/OM_Player/main/composeApp/icons/om-player.png</icon>
+  <url type="homepage">https://github.com/omarahmedpl/OM_Player</url>
+  <url type="bugtracker">https://github.com/omarahmedpl/OM_Player/issues</url>
+  <url type="vcs-browser">https://github.com/omarahmedpl/OM_Player</url>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Video</category>
+    <category>Player</category>
+  </categories>
+  <keywords>
+    <keyword>video</keyword>
+    <keyword>movie</keyword>
+    <keyword>subtitles</keyword>
+  </keywords>
+  <provides>
+    <binary>om-player</binary>
+  </provides>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+  <branding>
+    <color type="primary" scheme_preference="light">#F7F7F9</color>
+    <color type="primary" scheme_preference="dark">#0A0A0E</color>
+  </branding>
+  <content_rating type="oars-1.1"/>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Library with thumbnails</caption>
+      <image>https://raw.githubusercontent.com/omarahmedpl/OM_Player/main/packaging/flathub/screenshots/library.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Player with controls</caption>
+      <image>https://raw.githubusercontent.com/omarahmedpl/OM_Player/main/packaging/flathub/screenshots/player.png</image>
+    </screenshot>
+  </screenshots>
+  <releases>
+    <release version="1.0.0" date="2026-10-28">
+      <description>
+        <p>First release: library, player, subtitles, speed, A-B repeat, sleep timer and fullscreen.</p>
+      </description>
+    </release>
+  </releases>
+</component>
