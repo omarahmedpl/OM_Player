@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- TODO before submitting: add the two screenshots under packaging/flathub/screenshots/ and push them. -->
 <component type="desktop-application">
   <id>io.github.omarahmedpl.OMPlayer</id>
   <name>OM Player</name>
@@ -53,7 +52,7 @@
   <content_rating type="oars-1.1"/>
   <screenshots>
     <screenshot type="default">
-      <caption>Library with thumbnails</caption>
+      <caption>Library: folders, videos and music</caption>
       <image>https://raw.githubusercontent.com/omarahmedpl/OM_Player/main/packaging/flathub/screenshots/library.png</image>
     </screenshot>
     <screenshot>

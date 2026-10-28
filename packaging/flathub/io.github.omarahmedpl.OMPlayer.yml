@@ -1,4 +1,4 @@
-# Flathub manifest. TODO before submitting: publish the v1.0.0 release archive and fill in its sha256.
+# Flathub manifest. Source archive: GitHub release v1.0.0 of omarahmedpl/OM_Player.
 # The app archive is "om-player-<version>-linux-x86_64.tar.gz" = the Compose Desktop distributable folder
 # (./gradlew :composeApp:createDistributable → composeApp/build/compose/binaries/main/app/om-player), attached to
 # a GitHub release. Flathub forbids local "dir" sources; see local-test.yml for building on your machine.
@@ -32,7 +32,7 @@ modules:
     sources:
       - type: archive
         url: https://github.com/omarahmedpl/OM_Player/releases/download/v1.0.0/om-player-1.0.0-linux-x86_64.tar.gz
-        sha256: TODO
+        sha256: 287381923dd756138561bfad562c868b687bf6cfda7675fd1dabdfd36f343d33
         dest: om-player
       - type: file
         path: om-player.sh
