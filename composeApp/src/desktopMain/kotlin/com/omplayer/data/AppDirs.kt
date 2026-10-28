@@ -13,4 +13,15 @@ internal object AppDirs {
         }
         dir.also { it.mkdirs() }
     }
+
+    val cache: File by lazy {
+        val os = System.getProperty("os.name").orEmpty().lowercase()
+        val home = System.getProperty("user.home")
+        val dir = when {
+            "win" in os -> File(System.getenv("LOCALAPPDATA") ?: "$home/AppData/Local", "OM Player/Cache")
+            "mac" in os -> File(home, "Library/Caches/OM Player")
+            else -> File(System.getenv("XDG_CACHE_HOME") ?: "$home/.cache", "om-player")
+        }
+        dir.also { it.mkdirs() }
+    }
 }

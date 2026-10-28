@@ -20,6 +20,9 @@ class DesktopPlatformActions(private val windowState: WindowState) : PlatformAct
     /** Set from main.kt once the window exists. */
     var window: java.awt.Window? = null
 
+    /** The Linux fullscreen host is hidden before restoring [window], avoiding simultaneous Skia GL contexts. */
+    var fullscreenWindow: java.awt.Window? = null
+
     /**
      * Linux: fullscreen is OM Player's own borderless, screen-sized window ([FullscreenHost]); the system fullscreen
      * state is never entered, because on GNOME/XWayland + OpenJDK it can't be left (AWT re-applies it; reproduced with
@@ -34,10 +37,15 @@ class DesktopPlatformActions(private val windowState: WindowState) : PlatformAct
 
     override fun setFullscreen(enabled: Boolean) {
         if (ownFullscreenWindow) {
-            // The fullscreen window lives in the main window's composition, which pauses while the main window is
-            // hidden (FullscreenHost hides it so only one window renders). Show it first so it can recompose and close
-            // the fullscreen window; it appears underneath, so there is no flash.
-            if (!enabled) window?.isVisible = true
+            // Player cleanup also requests false when fullscreen was never entered. Showing the main window for that
+            // no-op can resize its Compose scene after the window has already been disposed during application exit.
+            if (fullscreenFlow.value == enabled) return
+            // Swap native visibility before changing Compose state: showing both windows at once makes Skia switch GL
+            // contexts on every frame on Linux, which can block the UI thread for seconds.
+            if (!enabled) {
+                fullscreenWindow?.isVisible = false
+                window?.isVisible = true
+            }
             fullscreenFlow.value = enabled
             lastSwitchMs = System.currentTimeMillis()
             return

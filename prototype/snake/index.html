@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0a0e">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Cpath d=%27M6 22V10h10v12h10V8%27 fill=%27none%27 stroke=%27%2334d399%27 stroke-width=%275%27/%3E%3C/svg%3E">
+<title>Snake — After hours arcade</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="snake.css">
+<script type="module" src="game.mjs"></script>
+</head>
+<body>
+<main>
+  <header><a class="wordmark" href="../index.html" aria-label="Back to OM Player prototypes"><span class="mark" aria-hidden="true">⌁</span> After hours<span class="arcade"> / arcade</span></a><span class="edition">No. 001</span></header>
+  <section class="intro"><div><p class="eyebrow">The original endless appetite</p><h1>Snake<span>.</span></h1><p class="subtitle">Small beginnings. Long ambitions.</p></div><div class="record"><span>Personal best</span><strong id="best">000</strong><small id="storage-note">Saved on this device</small></div></section>
+  <section class="game-layout" aria-label="Snake game">
+    <div class="machine">
+      <div class="toolbar"><span class="status"><i id="status-light"></i><span id="status">Ready to play</span></span><span class="score">Score <strong id="score">000</strong></span></div>
+      <div class="arena" id="arena">
+        <canvas id="board" width="600" height="600" role="img" aria-label="Snake game board. Use arrow keys, WASD, swipe, or the direction buttons."></canvas>
+        <div class="overlay" id="overlay"><div><span class="overlay-symbol" aria-hidden="true">⌁</span><h2 id="overlay-title">Find your flow.</h2><p id="overlay-copy">Eat. Grow. Keep going.</p><button class="primary" id="play">Start game <span aria-hidden="true">↗</span></button><small id="overlay-hint">or press Space</small></div></div>
+      </div>
+      <div class="machine-footer"><span><i class="food-dot"></i> +10 per bite</span><span>20 × 20 playground</span></div>
+    </div>
+    <aside>
+      <div class="side-heading"><span class="line"></span><h2>Stay sharp.</h2></div>
+      <p class="guide">Chase the glow.<br>Give yourself room to grow.</p>
+      <div class="instruction"><span class="number">01</span><div><h3>Make your move</h3><p>Arrow keys or WASD to steer. On mobile, swipe the board or use the pad.</p><div class="key-row"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div></div></div>
+      <div class="instruction"><span class="number">02</span><div><h3>Watch your tail</h3><p>Cross an edge to appear on the opposite side. Only hitting your own body ends the run.</p></div></div>
+      <div class="instruction"><span class="number">03</span><div><h3>Take a breath</h3><p>Space or P pauses the action. Your next move can wait.</p></div></div>
+      <div class="actions"><button id="pause" disabled>Pause <kbd>Space</kbd></button><button id="restart">Restart <span aria-hidden="true">↻</span></button></div>
+      <div class="touch-pad" role="group" aria-label="Direction controls"><button data-direction="up" aria-label="Move up">↑</button><button data-direction="left" aria-label="Move left">←</button><span aria-hidden="true">⌁</span><button data-direction="right" aria-label="Move right">→</button><button data-direction="down" aria-label="Move down">↓</button></div>
+    </aside>
+  </section>
+  <footer><span>A little focus. A longer snake.</span><span>Built for the joy of playing.</span></footer>
+  <p class="sr-only" id="announcement" role="status" aria-live="polite"></p>
+</main>
+</body>
+</html>

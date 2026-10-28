@@ -22,6 +22,9 @@ import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.URI
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
 import java.util.LinkedHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -34,6 +37,7 @@ import com.omplayer.player.PlayerEngine
 import com.omplayer.player.ScaleMode
 import com.omplayer.player.VlcjPlayerEngine
 import com.omplayer.player.VlcDiscovery
+import com.omplayer.data.AppDirs
 import uk.co.caprica.vlcj.media.Media
 import uk.co.caprica.vlcj.media.MediaParsedStatus
 import uk.co.caprica.vlcj.media.Meta
@@ -96,6 +100,7 @@ private object DesktopThumbnailCache {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Unit>?) = size > 256
     }
     private val extractionLock = Mutex()
+    private val diskCacheDir by lazy { File(AppDirs.cache, "video-thumbnails") }
     private val extractor by lazy {
         if (!VlcDiscovery.discover()) null
         else MediaPlayerFactory("--no-video-title-show", "--quiet", "--no-osd", "--no-audio")
@@ -117,8 +122,56 @@ private object DesktopThumbnailCache {
 
     suspend fun load(uri: String): ImageBitmap? = withContext(Dispatchers.IO) {
         get(uri) ?: if (wasMissing(uri)) null else extractionLock.withLock {
-            get(uri) ?: snapshotFrame(uri).also { save(uri, it) }
+            get(uri) ?: loadDisk(uri)?.also { save(uri, it) }
+                ?: snapshotFrame(uri).also { save(uri, it) }
         }
+    }
+
+    private fun loadDisk(uri: String): ImageBitmap? {
+        val file = diskFile(uri)
+        if (!file.isFile) return null
+        return runCatching {
+            ImageIO.read(file)?.also { file.setLastModified(System.currentTimeMillis()) }?.toComposeImageBitmap()
+        }.getOrNull() ?: run {
+            file.delete()
+            null
+        }
+    }
+
+    private fun saveDisk(uri: String, image: BufferedImage) {
+        runCatching {
+            if (!diskCacheDir.isDirectory && !diskCacheDir.mkdirs()) return
+            val target = diskFile(uri)
+            val temporary = File.createTempFile("thumbnail-", ".tmp", diskCacheDir)
+            try {
+                check(ImageIO.write(image, "png", temporary))
+                try {
+                    Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+                } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+                    Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                }
+                target.setLastModified(System.currentTimeMillis())
+                val cachedFiles = diskCacheDir.listFiles { file -> file.isFile && file.extension == "png" }.orEmpty()
+                cachedFiles.sortedBy { it.lastModified() }
+                    .take(maxOf(0, cachedFiles.size - 48))
+                    .forEach(File::delete)
+            } finally {
+                temporary.delete()
+            }
+        }
+    }
+
+    private fun diskFile(uri: String): File {
+        val parsed = runCatching { URI(uri) }.getOrNull()
+        val source = when (parsed?.scheme?.lowercase()) {
+            "file" -> runCatching { File(parsed) }.getOrNull()
+            else -> File(uri)
+        }?.takeIf { it.isFile }
+        val identity = if (source != null) "${source.absolutePath}\u0000${source.length()}\u0000${source.lastModified()}" else uri
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(identity.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+        return File(diskCacheDir, "$digest.png")
     }
 
     suspend fun loadArtwork(uri: String): ImageBitmap? = withContext(Dispatchers.IO) {
@@ -175,6 +228,7 @@ private object DesktopThumbnailCache {
                 setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR)
                 drawImage(src, 0, 0, tw, th, null); dispose()
             }
+            saveDisk(uri, scaled)
             scaled.toComposeImageBitmap()
         } finally {
             player.events().removeMediaPlayerEventListener(ended)

@@ -156,7 +156,7 @@ Then: Codex review, Sonnet fixes, Haiku checks, a build of both targets, and a d
 - [x] Desktop volume slider (0–200%, boost shown in warning colour) next to mute in `BottomBar`
 - [x] Desktop bottom controls: play between previous/next; volume slider revealed on hover or keyboard focus; bottom-bar clicks intercepted; hand cursor limited to bottom-bar buttons. Both targets build. Visual screenshot checked; click, cursor and audible volume behavior still need hands-on verification.
 - [x] Player behavior fixes: video clicks and center double-taps no longer toggle playback; Space and explicit play/pause buttons do. Escape closes a panel or exits fullscreen, and never closes the player. Android player panels no longer have empty parent tap detectors that intercept their controls.
-- [x] Android player no longer forces Activity landscape orientation. Only the video layer rotates; controls stay upright and use two rows on narrow portrait screens. Fullscreen hides system bars independently of orientation. SurfaceView handles ordinary playback; TextureView handles manual transforms. Real 1280×720 content, portrait 360×640, rotation metadata, all four manual rotations, and device rotation were checked on the AVD. Android library video cells load cached thumbnails from MediaStore, with a frame-retrieval fallback on API 26–28. Android launcher icon and system splash screen use the Playhead mark.
+- [x] Android has an owner-approved whole-screen rotate button; device orientation resets when leaving the player. Fullscreen hides system bars independently. SurfaceView handles ordinary playback. Real 1280×720 footage and portrait media were checked on the AVD; embedded rotation metadata and all four manual video-layer rotations were checked before the owner chose whole-screen rotation. Android library video cells load cached thumbnails from MediaStore, with a frame-retrieval fallback on API 26–28. Android launcher icon and system splash screen use the Playhead mark.
 - [x] Performance: library folder flattening and video-folder lookup are memoized across recompositions; desktop VLC frame copies are limited to 60 Hz. Android renderer measurements and limitations are below. Physical-device and desktop performance remain unmeasured.
 - [x] Android Media3 engine is released whenever its Activity is destroyed, so Activity recreation does not reuse an active fixed-ID MediaSession.
 - [ ] Verify hover/cursor on desktop by hand (can't be screenshotted here; no xdotool)
@@ -164,11 +164,11 @@ Then: Codex review, Sonnet fixes, Haiku checks, a build of both targets, and a d
 - [ ] Desktop: subtitle background box (libVLC freetype is global), `bufferedMs` always 0, duration/resolution unknown at scan (parse with vlcj)
 - [ ] Android: subtitle delay doesn't shift cues yet (stored only); Original scale = Fit; no background-play service; FFmpeg audio extension (AC3/EAC3/DTS) not added
 - [ ] Persistence of settings (theme, gestures…) on both platforms; progress already persists (SharedPreferences / ~/.config/om-player/progress.json)
-- [ ] Physical-device test (the connected phone was not used). Remaining Android emulator checks: library thumbnails and launcher interaction. Player panels, rotation, fullscreen, replay, speed, seeking, and native splash were checked on API 34.
+- [ ] Physical-device test (the connected phone was not used). Remaining Android checks: embedded song artwork, launcher interaction, and repeated player open/close. A real video thumbnail and player panels, whole-screen rotation, fullscreen, replay, speed, seeking, and native splash were checked on API 34.
 
-### Session 2026-10-28 (Claude): rotation, PiP, startup, lag (uncommitted)
+### Session 2026-10-28 (Claude): rotation, PiP, startup, lag (integrated)
 
-All changes below are uncommitted on top of the earlier dirty tree (nothing reset, committed or pushed).
+These recovery changes were integrated in `6d8ddff`; Flathub metadata and screenshots were added in `7371786`. Check `git status` before editing and preserve any new dirty files. No reset, commit, or push is authorized for follow-up fixes.
 
 **Re-verified on `emulator-5554` (API 34) with real footage** (`/sdcard/Download/recovery-real.mp4`, copied from the approved `Shop-Hanimex (2).mp4`; H.264 1280×720, 19.4 s, no rotation tag). The emulator's data had been reset, so the APK and file were reinstalled.
 - Real content renders, with no colour bars: `OMVideo decoded=1280x720 metadataRotation=0`. Aspect ratio is kept and centred in portrait.
@@ -216,6 +216,8 @@ All changes below are uncommitted on top of the earlier dirty tree (nothing rese
 - The benchmark build plays real footage with no crash. Judge smoothness on release-like builds, not debug ones.
 - Remaining: about 13% janky frames on the emulator in release mode, cause not yet attributed.
 - Next diagnostic: a Perfetto trace of the same workload, and a Baseline Profile / Macrobenchmark module for app code.
+- Follow-up diagnostic on 2026-10-28: the host-GPU emulator crashed during startup, so the AVD was restarted with SwiftShader. The approved real 19.4-second H.264 clip rendered actual footage and reached natural end (`STOPPED`, 19,420 ms, no Media3 error); this rules out the fixture bars as the clip's displayed content in that run. A synchronized process-cold launch measured 1,530 ms (`am start -W TotalTime`). In its Perfetto trace, the UI-thread `traversal` slice lasted 1,189.8 ms, including 845.1 ms sleeping and about 281 ms running; child `draw` was 160.3 ms. This is not evidence of 1.19 seconds of app CPU work. The trace and app frame timeline show deadline misses, but the SwiftShader backend and surface/compositor waits prevent attributing them to app code. Trace: `/tmp/omplayer-cold-start-synced-20261028.perfetto-trace` (7.38 MB); local Trace Processor v58.2 is at `/tmp/trace_processor_shell` (SHA-256 `58042408e6cc861fb1a731c26bb082dc222285561eaa4e12a48a8b2b90dca7b9`).
+- A 25-second playback trace of the same real clip is `/tmp/omplayer-playback-20261028.perfetto-trace` (about 21.5 MB). After a frame reset, `dumpsys gfxinfo` reported 27 frames, 22 janky (81.48%), p50 44 ms, p90 121 ms, 14 slow UI frames, 20 slow issue-draw frames and 20 deadline misses. This is a noisy SwiftShader measurement, not comparable to the earlier hardware-style benchmark (13.2% median jank); it does not establish video FPS or an app bottleneck. Repeat on a hardware-accelerated AVD or physical device before making Android performance changes. No app optimization was made from these readings.
 
 **5. Release-lint fix.** The release/benchmark build failed lint with a `ResourceCycle` error: `Theme.OmPlayer.App` was the dot-name child of `Theme.OmPlayer` and also its parent. The base was renamed to `OmPlayerBase` in `res/values/styles.xml` and `res/values-v31/styles.xml`. Debug builds never ran this check.
 
@@ -311,24 +313,39 @@ All changes below are uncommitted on top of the earlier dirty tree (nothing rese
   - Build and state dirs must be host-visible, because the Builder's own sandbox has a private `/tmp`. `--disable-rofiles-fuse` was needed here.
   - Installed size is 274 MB. `flatpak run io.github.omarahmedpl.OMPlayer "<video in ~/Downloads>"` plays real footage, and no libVLC errors remain.
 - **Still to do before submitting:**
-  - `v1.0.0` release tarball, whose sha256 goes into `io.github.omarahmedpl.OMPlayer.yml` (currently `TODO`)
-  - screenshots
-  - run `flatpak-builder-lint`
-  - PR to `flathub/flathub` on the `new-pr` branch
+  - [x] `v1.0.0` release archive checksum and screenshots are present (commit `7371786`)
+  - run `flatpak-builder-lint` (not installed on this host at the 2026-10-28 check)
   - The library scan and the "Open with" desktop entry were not tested inside the sandbox.
+  - **Owner-submitted Flathub policy:** the manifest must be human-authored without AI assistance. The manifest and libVLC manifest first appeared in the broad Claude-started commit `6d8ddff`; verify provenance and manually reauthor them if AI-assisted. AI agents must not open/automate the submission PR, draft its text, or review the submission. Disclose the AI-assisted app components and approximate extent.
+
+**12. Fixed bug: desktop close raised `size set after ComposeScene is closed` (2026-10-28).**
+- Reproduced on the Gradle desktop run after opening a real library video and closing the main window. The stack showed `PlayerScreen` cleanup calling `DesktopPlatformActions.setFullscreen(false)`, which re-showed the already-visible main window even though fullscreen was never entered.
+- A second reproduction after fullscreen exit showed late `isVisible` writes in `FullscreenHost.desktop.kt`'s `DisposableEffect.onDispose`; they ran while Compose was disposing the fullscreen scene.
+- Fixes: `DesktopPlatformActions.setFullscreen` now ignores unchanged Linux fullscreen state, so ordinary player cleanup cannot re-show the window. `FullscreenHost` no longer changes native window visibility during disposal; the fullscreen state transition restores the main window before Compose removes the fullscreen host, and Compose owns that window's lifecycle.
+- Files: `composeApp/src/desktopMain/kotlin/com/omplayer/DesktopPlatformActions.kt` and `FullscreenHost.desktop.kt`.
+- Verified on the Linux desktop with `./gradlew :composeApp:run`: library-only close; active-video close (reproduced before the fix, clean after it); fullscreen enter, fullscreen-window close/return, then app close. The final run exited `BUILD SUCCESSFUL` with no Compose exception or Error dialog.
+- `:composeApp:compileKotlinDesktop` passed after the final change. The required desktop compile + Android debug assembly also passed before editing. No unit-test sources exist. Packaging was not rebuilt; the existing `.deb`/Flatpak bundles need a rebuild before distributing this fix.
+- libVLC emitted `vlc_xlib_init: Xlib not initialized for threads` during playback startup; it did not prevent tested playback or close and was not investigated in this fix.
+
+**13. Desktop fullscreen close-lag follow-up (2026-10-28; runtime pending).**
+- Prior thread dumps showed that two visible Compose windows make Skiko's Linux OpenGL redrawer switch GL contexts, blocking the UI thread for up to about 3 seconds. The visibility handoff could briefly show the main and fullscreen windows together.
+- `FullscreenHost.desktop.kt` now creates its window hidden, hides the main window, then reveals fullscreen. On exit, `DesktopPlatformActions.setFullscreen(false)` hides the fullscreen window before restoring the main window. Desktop video thumbnails now also persist in an OS cache directory, keyed by source path, file size and modified time, with a 48-file disk cap; the existing 48-entry memory LRU remains the fast path. Song artwork remains memory-cached only.
+- Files: `DesktopPlatformActions.kt`, `FullscreenHost.desktop.kt`, `VideoSurface.desktop.kt`, and `data/AppDirs.kt`.
+- `./gradlew :composeApp:compileKotlinDesktop :composeApp:assembleDebug --console=plain` passed after the changes (`BUILD SUCCESSFUL`, 10 seconds; existing icon deprecation warnings only). The new fullscreen visibility sequence and disk-cache reuse across app restarts have not yet been exercised in a fresh desktop runtime. Do not claim close lag or persistent caching is runtime-verified until checked in the updated app.
+- Release build requested by owner: Android `versionName` aligned to `1.0.0`, `versionCode` advanced to `2`. `:composeApp:assembleRelease` passed; `apksigner verify` passed with the configured release certificate. Final artifacts: `dist/om-player-1.0.0.apk` and `dist/om-player_1.0.0_amd64.deb`; `dist/SHA256SUMS` updated and checked. The Debian package contains the app, menu entry, icon and libVLC dependencies. The 1.2 GB `composeApp/build` directory was cleaned after copying artifacts to `dist/`; the final files remain. Fullscreen and persistent-thumbnail behavior were not runtime-tested in these final packages. The old installed Debian package could not be removed from Codex because sudo requires an interactive password; owner can run `sudo apt remove --yes om-player` in a terminal.
 
 **Builds and checks**
 - `compileKotlinDesktop`, `assembleDebug` and `assembleBenchmark` succeed.
 - There are still no unit-test sources, so no tests count as passing.
 - The debug APK is reinstalled on the emulator.
-- **Desktop:** a real video plays with the controls overlaid and no rotate button. Hover, cursor and audible volume still need checking by hand; there's no input injection here.
+- **Desktop:** a real video plays with controls overlaid and no rotate button. This session also verified fullscreen enter/exit and clean close. Hover, cursor, volume and remaining button behavior still need hands-on checks.
 - **Not verified this session:** physical device, Android below 34, Android audio artwork, desktop performance.
 
-### Android recovery evidence (2026-10-28)
+### Android video-layer recovery evidence (2026-10-28; historical, before the owner chose whole-screen rotation)
 
 Recovery files: `PlayerScreen.kt`, `PlayerChrome.kt`, and `PlayerPanels.kt` for orientation, responsive controls, fullscreen and the sheet race; Android `VideoSurface.android.kt` for surface selection and filtered subtitle updates; `Platform.kt` and the desktop actual for the compatible surface argument; `Media3PlayerEngine.kt` for debug-only decoder diagnostics; `MainActivity.kt` and native splash resources for the exit transition, pacing and mask-safe icon. Other pre-existing dirty changes were retained.
 
-**Baseline and causes.** The latest committed baseline is `216447a`; the earlier attempts are uncommitted changes. Their intermediate whole-stage rotation patch is not preserved as a separate Git commit, so its exact historical diff cannot be reconstructed safely. The current source and runtime confirmed:
+**Baseline and causes (historical video-only recovery).** Investigation began at `216447a`; those recovery changes were later integrated in `6d8ddff`. This section records the intermediate video-only rotation design, which the owner later replaced with whole-screen rotation in the session notes above. The intermediate whole-stage patch is not preserved as a separate Git commit, so its exact historical diff cannot be reconstructed safely. The source and runtime at that time confirmed:
 
 - `PlayerScreen.kt` forced `setLandscape(true)` on entry. This rotated the Activity independently of the manual video transform. Removing that call preserves device orientation; the video-only layer swaps its pre-transform bounds for quarter turns. Media3 applies file metadata once; the manual adjustment starts at zero.
 - The last `VideoSurface.android.kt` fix forced every video through TextureView. The original SurfaceView path renders ordinary video correctly and avoids feeding every decoded frame through the app's drawing pipeline. TextureView is now used only when needed for manual transforms.
@@ -375,9 +392,9 @@ How to check the desktop app visually here: run `./gradlew :composeApp:run --arg
 
 ## 6. Continuation briefing for Claude
 
-Continue from the current working tree. Milestone 1's four implementation agents have already finished and their work was integrated in `e6bbba6`; do not dispatch that original build again. The latest committed baseline is `216447a`, but the Android recovery and earlier user-approved fixes are still **uncommitted**. Inspect `git status` and scoped diffs; preserve the dirty files and untracked Android resources. Do not reset the repository, discard existing work, commit, or push without an explicit owner request.
+Continue from the current working tree. Milestone 1's four implementation agents have already finished and their work was integrated in `e6bbba6`; do not dispatch that original build again. The player/recovery code is integrated in `6d8ddff`, and the current branch head is `7371786`. Inspect `git status` and scoped diffs; preserve all current edits. Do not reset the repository, discard existing work, commit, or push without an explicit owner request.
 
-Read `AGENTS.md`, the status checklist, and **Android recovery evidence** above before editing. The owner's latest priorities are correct real-video rendering, video-only rotation with upright controls, functioning player buttons, measured performance, and a smooth native splash. Keep the Compose Multiplatform / Media3 / vlcj architecture. Graphify's current graph contains design documents only, so Kotlin changes still require direct source inspection.
+Read `AGENTS.md`, the status checklist, and the historical Android recovery evidence above before editing. The owner confirmed whole-screen rotation; keep real video correct, controls functional, performance measured, and the native splash smooth. Keep the Compose Multiplatform / Media3 / vlcj architecture. Graphify indexes source and design files; use it to navigate, then verify Kotlin behavior directly. The separate code-review graph was stale at `216447a` during the latest check.
 
 Last verified runtime was the API 34 AVD `azkar`, addressed as `emulator-5554`. A physical phone was also connected and was not used. Target emulator commands explicitly with `adb -s emulator-5554` after checking the current device list. The owner approved copying only `~/Downloads/Shop-Hanimex (2).mp4` into the emulator as `/sdcard/Download/recovery-real.mp4` for these tests; the original file was not modified. Do not substitute the color-bar fixture for real-content verification.
 
@@ -386,16 +403,36 @@ The final debug APK is `composeApp/build/outputs/apk/debug/composeApp-debug.apk`
 If continuing in Codex instead, start from the same folder:
 ```bash
 cd /home/omarahmed/Downloads/OM_Player
-codex "Read AGENTS.md and docs/HANDOFF.md, preserve the existing dirty working tree, build both targets, then continue from the current recovery checklist."
+codex "Read AGENTS.md and docs/HANDOFF.md, inspect git status and scoped diffs, preserve the existing dirty working tree, and continue from the numbered next steps."
 ```
 Codex reads `AGENTS.md` automatically.
 
 ## 7. Next steps
 
-1. **Profile remaining UI lag on release-like builds** (startup engine cost fixed; see session notes and the `benchmark` build type). Startup was measured, but did not improve consistently. Capture a cold-start trace to separate Media3/session initialization, first Compose layout, native surface creation, and emulator overhead. The reduced app draw count is not a video-FPS measurement. Use the same device, source, orientation, and workload for comparisons; preserve the ordinary SurfaceView path and filtered subtitle updates.
-2. **(Done 2026-10-28, see session notes) Check PiP close versus restore.** `PlayerScreen.kt` currently stops playback whenever an entered PiP session returns to `inPip=false`. Verify both dismissing the popup and returning to the Activity; the source does not distinguish those paths. The owner wants dismissal to stop playback immediately. Do not mark restoring PiP correct without testing it separately.
-3. **Verify remaining Android library behavior.** Test video thumbnails and embedded song artwork with real files, launcher interaction, and repeated player open/close. Rotation, panels, seeking, speed, replay, fullscreen and splash passed on API 34; physical devices and older Android versions remain untested. Android below API 31 retains the existing static launch-screen path.
-4. **Perform desktop runtime checks.** Confirm hover volume, audible volume changes, cursor boundaries, Space/button-only pause, Escape/fullscreen exit, panel controls, video thumbnails and song artwork. Desktop compilation passed, but this recovery did not measure desktop performance or revalidate its runtime. Profile reported desktop lag before further optimization.
+1. **Profile remaining UI lag on release-like builds** (startup engine cost fixed; see session notes and the `benchmark` build type). The synchronized cold-start and playback traces are analyzed, but SwiftShader surface/compositor waits make these results unsuitable for blaming app code. Repeat the same workload on a hardware-accelerated AVD or physical device; preserve the ordinary SurfaceView path and filtered subtitle updates.
+2. **[x] PiP close versus restore.** `MainActivity` distinguishes dismissal from Activity restoration. Dismissal pauses/stops and closes the player; expanding PiP keeps playback and the player open. Both paths were verified on `emulator-5554` (see session notes).
+3. **Verify remaining Android library behavior.** A real video thumbnail was inspected with its duration and 720p label. Still verify embedded song artwork, launcher interaction, and repeated open/close. Physical devices, older Android versions, and Android below API 31's static launch screen remain untested.
+4. **Finish desktop runtime checks.** Earlier checks verified playback, fullscreen and clean teardown. Rebuild/relaunch and verify the latest fullscreen visibility-order patch, including entry, exit and close lag. Still check hover volume, audible volume changes, cursor boundaries, Space/button-only pause, panel controls, video thumbnails and song artwork. Desktop performance remains unmeasured; profile before optimizing further.
 5. **Review the integrated Milestone 1 and recovery diff.** Pay particular attention to surface replacement during rotation/zoom, sheet cancellation, Activity/engine lifecycle, and PiP behavior. Add focused regression coverage using existing infrastructure where practical; do not count `NO-SOURCE` tasks as passing tests.
 6. **Continue remaining milestone gaps after recovery review:** settings persistence, Android subtitle delay application, proper Original scale behavior, background-play service, FFmpeg audio support, and the desktop gaps listed above. Keep each change scoped and update this handoff with actual verification.
-7. **Package only when requested:** `./gradlew :composeApp:packageDeb` for Linux; MSI on Windows; signed APK/AAB for Android. A desktop compile is not a rebuilt Linux distributable. No commit, push, or release was performed during recovery.
+7. **Final package build completed on request:** release APK and Debian package are in `dist/` as listed above. The installed Debian package removal still needs the owner's interactive sudo password. Do not publish or submit; the Flathub manifest authorship and policy constraints must be resolved by the owner, who must submit any PR manually.
+
+## Standalone Snake browser game (2026-10-28)
+
+- Added `prototype/snake/` using the existing vanilla HTML/CSS/JS prototype stack and shared tokens; no dependencies or native player changes. Serve the repo with `python3 -m http.server 8765` and open `http://localhost:8765/prototype/snake/`.
+- Includes keyboard, swipe and direction-button controls; start/pause/resume/restart; bounded turn buffering; scoring, wall/body collisions, board-clear win, automatic pause on focus loss, and localStorage high score with an explicit session-only notice if storage fails.
+- Run focused tests with `node prototype/snake/engine.test.mjs`: 10 passed, 0 failed. `node --check prototype/snake/game.mjs` passed.
+- Browser checks passed: start, pause with stationary board, resume, WASD input, restart reset, wall game-over, replay, scoring, high score after reload, mobile direction control, blur auto-pause, and no horizontal overflow at 375 px. Desktop and mobile screenshots were inspected. Physical phone behavior remains unverified.
+- Baseline native build was attempted before changes but blocked by the sandbox's read-only Gradle wrapper lock in `~/.gradle`; native targets were not verified by this task. Existing desktop edits and earlier handoff changes were preserved.
+
+### Snake edge wrapping (2026-10-28)
+
+- Changed all four edges to wrap to the opposite side; only self-collision causes a loss. Updated the on-screen instructions.
+- `node prototype/snake/engine.test.mjs`: 12 passed, 0 failed, including all four wrap directions, wrapped self-collision, and eating across an edge. `git diff --check` passed. Browser verification above predates this rule change; this update was verified through engine tests.
+
+### Snake reliability audit (2026-10-28)
+
+- Kept edge wrapping, engine rules, visual design and the single animation loop unchanged.
+- Fixed Space activating a focused Restart/direction button instead of pausing. Fixed unfinished swipes surviving restart or pause/resume, and secondary pointers replacing/cancelling the active swipe.
+- Added controller regression tests using Node's existing test runner, a minimal DOM and a deterministic clock. Expanded engine tests to cover every reverse direction and all possible food cells.
+- Verification: `node prototype/snake/engine.test.mjs` passed 14/14; `node prototype/snake/game.test.mjs` passed 9/9; `node --check prototype/snake/game.mjs` and `git diff --check` passed. Two controller regressions failed before the fix. Browser checks confirmed Space pauses with Restart or a direction button focused, without runtime errors. Physical multi-touch remains unverified; pointer ownership and cancellation are covered by controller tests.

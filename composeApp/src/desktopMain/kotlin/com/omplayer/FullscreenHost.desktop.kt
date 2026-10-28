@@ -3,7 +3,10 @@ package com.omplayer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import kotlinx.coroutines.delay
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -32,7 +35,9 @@ actual fun FullscreenHost(active: Boolean, onExit: () -> Unit, content: @Composa
         position = WindowPosition(screen.x.dp, screen.y.dp),
         size = DpSize(screen.width.dp, screen.height.dp),
     )
+    var windowVisible by remember { mutableStateOf(false) }
     Window(
+        visible = windowVisible,
         onCloseRequest = onExit,
         title = "OM Player",
         undecorated = true,
@@ -50,12 +55,14 @@ actual fun FullscreenHost(active: Boolean, onExit: () -> Unit, content: @Composa
         }
         // Only one window may render at a time: with both visible, Skiko's Linux OpenGL redrawer switches GL contexts
         // every frame and glXMakeCurrent blocked the UI thread for up to ~3 s (thread dumps), delaying clicks, hover and
-        // exit. Hide the main window while fullscreen; show it again before this one goes away.
-        DisposableEffect(Unit) {
+        // exit. Hide the main window while fullscreen. DesktopPlatformActions restores it before switching this host
+        // out; Compose owns this window's hide/dispose lifecycle, so don't touch native visibility during onDispose.
+        DisposableEffect(window) {
+            platform.fullscreenWindow = window
             platform.window?.isVisible = false
+            windowVisible = true
             onDispose {
-                platform.window?.isVisible = true
-                window.isVisible = false
+                if (platform.fullscreenWindow === window) platform.fullscreenWindow = null
             }
         }
         content()
