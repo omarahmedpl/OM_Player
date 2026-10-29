@@ -6,6 +6,66 @@ OM Player is an original, ad-free video player for **Android and PC**. It's insp
 
 ---
 
+## 0. Current state (read this first; last updated 2026-10-29)
+
+**What it is:** OM Player, an original, ad-free player for Android and PC (Compose Multiplatform). Owner: Omar Ahmed. Repo: `/home/omarahmed/Downloads/OM_Player`, branch `main`, remote `git@github.com:omarahmedpl/OM_Player.git` (public, GPL-3.0-or-later; **nothing from the last sessions has been pushed**). HEAD `828a7ac`, working tree clean. Newer sections below are dated; older ones are history.
+
+### Editions and artifacts
+| Edition | applicationId | Label | Discover tab | File (in git-ignored `dist/`) |
+|---|---|---|---|---|
+| lite | `com.omplayer` | OM Player | no | `om-player-1.0.0.apk` |
+| plus | `com.omplayer.plus` | OM Player+ | yes (Audius) | `om-player-plus-1.0.0.apk` |
+Both: versionCode 6, versionName 1.0.0 (plus: `1.0.0-plus`), signed with the owner's release key, install side by side. `dist/` also has `om-player_1.0.0_amd64.deb` (built before the cover/Discover work: **rebuild before distributing**) and `SHA256SUMS`. **Keep the plus APK private** (owner's decision): never attach it to a GitHub release; the Windows workflow builds only the desktop installer. Desktop Discover is off unless `OMPLAYER_DISCOVER=1`.
+Release key: `~/.android/om-player-release.jks`, alias `omplayer`; passwords only in git-ignored `local.properties` (`omplayer.release.*`). Cert SHA-256 `f8ddfb85e70a2e948bbc40b70a6651fd7ae25614bfbb44247c81bd1b2292dda1`. **Back the key up; losing it means installed copies can't update.**
+
+### Build, test, install
+```bash
+./gradlew :composeApp:desktopTest                                  # 9 unit tests (commonTest), all pass
+./gradlew :composeApp:compileKotlinDesktop :composeApp:assembleLiteDebug :composeApp:assemblePlusDebug
+./gradlew :composeApp:assembleLiteRelease :composeApp:assemblePlusRelease   # signed APKs in composeApp/build/outputs/apk/{lite,plus}/release/
+packaging/linux/build-deb.sh                                       # run in the FOREGROUND (a background run produced an empty package once)
+adb -s <serial> install -r <apk>
+```
+Devices used: AVD `azkar` (API 34, `emulator-5554`; start with `~/Android/Sdk/emulator/emulator -avd azkar -gpu swiftshader_indirect -no-snapshot-save`; SystemUI may show an ANR dialog after boot: tap Wait) and the owner's phone Samsung SM-S721B (Android 16), serial `R5CX90H99EP`, with **both lite and plus installed**. adb prints "Shell does not have permission to access user 150" on that phone; it is harmless.
+
+### Architecture in one page
+- `composeApp/src/commonMain`: all UI and contracts. `App.kt` (navigation, audio routing, `AudioProgressSaver`, `RestoreLastSession`), `Platform.kt` (`AppDeps`, `PlatformActions`, expect functions), `player/PlayerEngine.kt`, `data/*` (`UserLibrary` favourites/playlists/edits/lyrics, `SessionStore`, `PlaylistExport` + `MiniJson`, `Lyrics*`, `Online*`), `ui/library/*` (Music tabs, playlists, selection, edit song, Discover), `ui/player/*` (video player, `AudioPlayer.kt` Now Playing + mini-player, `Lyrics.kt`).
+- `androidMain`: `Media3PlayerEngine` (one per process via `get(context)`), `PlaybackService` (MediaSessionService), `MainActivity`, `AndroidPlatformActions` (share, delete, pickers, notification permission, playlist share), `MediaStoreRepository`, `CoverStore`, `PlaylistImage`.
+- `desktopMain`: vlcj/libVLC engine, folder scanner, own fullscreen window on Linux, file storage. Audio on desktop still uses the video player (the audio-first UI is phones only).
+- `jvmShared` (added to both android and desktop source sets): `Http`, `LrcLibLyrics`, `MusicBrainzCovers`, `AudiusSource`.
+- Contracts to keep in sync with this file: `PlayerEngine` (queue, repeat, shuffle, sleep, `updateItem`, `openQueue(..., autoPlay)`), `PlatformActions` (`shareMedia`, `deleteMedia`, `sharePlaylists`, `pickTextFile`, `pickImage`, `saveCoverImage`, `onAudioPlaybackStarted`), `AppDeps` (`userData`, `lyrics`, `covers`, `online`, `session`), `MediaItem` (`artist`, `album`, `coverPath`).
+- Streamed items: `MediaItem.id` starts `audius:`, `uri` is the stream address, `coverPath` the artwork address; the player hides favourite, add-to-playlist and edit for them (`isStreamed`).
+- Android flavors: `edition` dimension, `BuildConfig.DISCOVER`, manifest label via `${appLabel}`.
+
+### Done (verified on the emulator unless noted)
+Video player and library (earlier sessions); audio-first player with queue, shuffle, repeat, speed, sleep timer, favourites, background service and notification; mini-player; drag-to-minimize; Music tabs (Songs, Artists, Albums, Folders, Favourites, Playlists, Discover); playlists (create, select, confirmed delete, share as PNG or JSON, import JSON); multi-select share/delete for audio and video; edit title/artist/cover (kept inside the app); lyrics (paste, LRCLIB lookup, synced follow); Find cover online (MusicBrainz + Cover Art Archive); Android subtitle delay; scroll position restore; sheet safe-area/keyboard insets; longer splash; resume last audio session paused on launch (also verified on the owner's phone); README; Windows MSI workflow file.
+
+### Not done / unverified
+- **No GitHub push, no release, and the Windows MSI workflow has never run** (needs a push; WiX 3 comes with the runner; Android SDK step may need tuning).
+- Picking a cover image through the system picker; JSON playlist share chooser; embedded artwork on real files; playback surviving a destroyed Activity (an earlier check was inconclusive); Android below API 34; desktop UI for the new music features; desktop performance; Windows/macOS fullscreen.
+- Notification text/artwork for the current song updates only on the next track change after an edit.
+- Streamed tracks are not restored on launch and have no favourites/playlists.
+- Queue list renders all rows (no lazy list).
+- LRCLIB returned HTTP 503 once (their side, transient). The owner later confirmed lyrics lookup works.
+
+### Decisions and hard rules
+- **Legal sources only.** No yt-dlp/youtube-dl style extraction, no scraping, no DRM circumvention, nothing ripped from Spotify, YouTube, Anghami or similar. The owner asked for the Nuclear-style yt-dlp route several times; it was declined (it breaks YouTube's terms and works around its protections). Nuclear was studied only for ideas (see STREAMING_PLAN.md); its code is AGPL-3.0, so reuse ideas, not code.
+- Clean-room (no MX Player code, assets or branding), read-media-only permissions (plus foreground-service and notification permissions for background audio), colours only from `OmTheme.colors`.
+- Commit only when the owner asks; never push unless asked.
+
+### What to do next (see `PLUS_BUILD_PROMPT.md`)
+1. Offline downloads for sources that allow them (Audius tracks with `access.download == true`), shared "Downloaded" list.
+2. More legal sources in Discover: Podcasts (Apple search + RSS), Internet Archive, internet radio (Radio Browser, stream only), Jamendo (needs the owner's free client id), optionally the owner's own Subsonic/Jellyfin server.
+3. SoundCloud: the owner is registering for API access himself. Needs a client id and a small token broker (the client secret must not ship in the APK). Plan in `STREAMING_PLAN.md`; no offline copies except tracks whose owner allows downloads.
+4. Push to GitHub, run the MSI workflow, publish a **lite-only** release.
+
+### Environment notes (added)
+- Codex runs in a read-only sandbox: give it files to read, not clones to make. The Codex planning output files in `tasks/` are separate from subagent transcripts.
+- Emulator screenshots and uiautomator dumps are how the UI was checked; there are no instrumented UI tests.
+- Graphify / code-review-graph indexes exist but were stale at times; verify in the source.
+
+---
+
 ## 1. Where things are
 
 | What | Where |
@@ -408,7 +468,7 @@ codex "Read AGENTS.md and docs/HANDOFF.md, inspect git status and scoped diffs, 
 ```
 Codex reads `AGENTS.md` automatically.
 
-## 7. Next steps
+## 7. Next steps (2026-10-28; partly superseded by section 0)
 
 1. **Profile remaining UI lag on release-like builds** (startup engine cost fixed; see session notes and the `benchmark` build type). The synchronized cold-start and playback traces are analyzed, but SwiftShader surface/compositor waits make these results unsuitable for blaming app code. Repeat the same workload on a hardware-accelerated AVD or physical device; preserve the ordinary SurfaceView path and filtered subtitle updates.
 2. **[x] PiP close versus restore.** `MainActivity` distinguishes dismissal from Activity restoration. Dismissal pauses/stops and closes the player; expanding PiP keeps playback and the player open. Both paths were verified on `emulator-5554` (see session notes).

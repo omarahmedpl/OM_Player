@@ -12,6 +12,8 @@ You are continuing **OM Player**, an original, ad-free video player for Android 
    Fix compile errors first.
 
 ## Rules
+- **Read `docs/HANDOFF.md` section 0 first.** Two Android editions exist (lite and plus); build both and keep the plus APK private.
+- **Legal sources only.** Never add yt-dlp/youtube-dl style extraction, scraping, or DRM circumvention, and never rip audio from Spotify, YouTube, Anghami or similar. Use official APIs and open licences, honour download flags and attribution rules, and keep keys out of the repo.
 - **Clean room:** never decompile, copy or reference MX Player code, assets, names or branding. Public-feature parity only.
 - **Contracts are stable** (see HANDOFF §4): `App(deps, openRequests)`, `LibraryRoot(...)`, `PlayerScreen(...)`, `PlayerEngine`, `expect VideoSurface(...)`, `PlatformActions`. Change them only with a matching update in HANDOFF.md.
 - **Design:** colours only from `OmTheme.colors`; spacing `OmSpace`, radius `OmRadius`, motion `OmMotion` (ease-out, ≤300 ms, sheets ≤380 ms, press scale 0.97, never animate keyboard-triggered actions). The player stays dark (`OmScheme(DarkColors)`). 44 dp touch targets on phone. Content descriptions on icon buttons. The UX reference is `prototype/mobile.html` and `prototype/desktop.html`.
@@ -20,4 +22,4 @@ You are continuing **OM Player**, an original, ad-free video player for Android 
 - Don't modify files outside this repo. The sample video in `~/Downloads/*.mp4` is the owner's: read only.
 
 ## Environment
-Linux, JDK 21, Gradle wrapper 8.14.3, Android SDK at `~/Android/Sdk` (API 36), VLC/libVLC installed (`/usr/lib/x86_64-linux-gnu/libvlc.so.5`). No phone attached.
+Linux, JDK 21, Gradle wrapper 8.14.3, Android SDK at `~/Android/Sdk` (API 36), VLC/libVLC installed (`/usr/lib/x86_64-linux-gnu/libvlc.so.5`). The owner's phone (SM-S721B, serial R5CX90H99EP) may be attached; target devices explicitly with `adb -s`.
