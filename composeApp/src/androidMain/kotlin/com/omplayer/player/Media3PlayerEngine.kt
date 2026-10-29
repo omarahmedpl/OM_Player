@@ -25,8 +25,12 @@ import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.DecoderCounters
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.TransferListener
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.ShuffleOrder
 import androidx.media3.exoplayer.ForwardingRenderer
 import androidx.media3.exoplayer.Renderer
 import androidx.media3.exoplayer.text.TextOutput
@@ -45,6 +49,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
+import java.io.IOException
 import java.util.Locale
 
 /** Media3 ExoPlayer implementation of [PlayerEngine]. All calls on the main thread. */
@@ -76,6 +81,7 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
 
     private var current: MediaItem? = null
     private var queueItems: List<MediaItem> = emptyList()
+    private var queueOrder: List<Int> = emptyList()
     private val prefs = appContext.getSharedPreferences("om_player_prefs", Context.MODE_PRIVATE)
     private var sleepEndsAt = 0L
     private var sleepAtEnd = false
@@ -100,6 +106,9 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
         override fun onEvents(player: Player, events: Player.Events) {
             if (events.contains(Player.EVENT_AUDIO_SESSION_ID)) applyVolume()
             if (events.contains(Player.EVENT_IS_PLAYING_CHANGED) || events.contains(Player.EVENT_PLAYBACK_STATE_CHANGED)) updateTicker()
+            if (events.contains(Player.EVENT_TIMELINE_CHANGED) || events.contains(Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED)) {
+                refreshQueueOrder()
+            }
             sync()
         }
 
@@ -123,6 +132,28 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
                 .setEnableDecoderFallback(true)
                 .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER),
         ).setHandleAudioBecomingNoisy(true)
+            // Discover entries carry a page address; swap it for a fresh media address as each one opens.
+            .setMediaSourceFactory(
+                androidx.media3.exoplayer.source.DefaultMediaSourceFactory(
+                    androidx.media3.datasource.ResolvingDataSource.Factory(
+                        YtdlQueryRangeDataSourceFactory(
+                            androidx.media3.datasource.DefaultDataSource.Factory(appContext),
+                        ),
+                    ) { spec ->
+                        val page = com.omplayer.data.pageUrlOf(spec.uri.toString())
+                        if (page == null) {
+                            spec
+                        } else {
+                            val direct = StreamResolver.resolve?.invoke(page)
+                                ?: throw java.io.IOException("Couldn't resolve that track")
+                            spec.buildUpon()
+                                .setUri(Uri.parse(direct.url))
+                                .setCustomData(direct)
+                                .build()
+                        }
+                    },
+                ),
+            )
             .build()
         player.addListener(listener)
         if (appContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
@@ -217,9 +248,38 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
             hasNext = player.hasNextMediaItem(),
             queue = queueItems,
             queueIndex = if (queueItems.isEmpty()) -1 else player.currentMediaItemIndex,
+            queueOrder = queueOrder,
             sleepEndsAtMs = sleepEndsAt,
             sleepAtTrackEnd = sleepAtEnd,
         )
+        com.omplayer.widget.OmWidgetState.update(
+            appContext,
+            current?.takeIf { it.isAudio },
+            _state.value.isPlaying,
+            _state.value.positionMs,
+            _state.value.durationMs,
+        )
+    }
+
+    /** Keep the visible queue in ExoPlayer's real next/previous traversal order when shuffle is on. */
+    private fun refreshQueueOrder() {
+        if (queueItems.isEmpty()) {
+            queueOrder = emptyList()
+            return
+        }
+        if (!player.shuffleModeEnabled) {
+            queueOrder = queueItems.indices.toList()
+            return
+        }
+        val shuffleOrder: ShuffleOrder = player.shuffleOrder
+        val traversal = buildList {
+            var index = shuffleOrder.firstIndex
+            while (index in queueItems.indices && size < queueItems.size) {
+                add(index)
+                index = shuffleOrder.getNextIndex(index)
+            }
+        }
+        queueOrder = queueDisplayOrder(queueItems.size, traversal)
     }
 
     private fun updateTicker() {
@@ -286,6 +346,7 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
             player.shuffleModeEnabled = false
         }
         player.setMediaItems(items.map(::build), startIndex, startMs.coerceAtLeast(0))
+        refreshQueueOrder()
         player.prepare()
         player.playWhenReady = autoPlay
         sync()
@@ -300,6 +361,7 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
 
     override fun setShuffle(enabled: Boolean) {
         player.shuffleModeEnabled = enabled
+        refreshQueueOrder()
         if (current?.isAudio != false) prefs.edit().putBoolean("audio_shuffle", enabled).apply()
         sync()
     }
@@ -451,13 +513,15 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
     override fun stop() {
         sleepJob?.cancel(); sleepJob = null; sleepEndsAt = 0L; sleepAtEnd = false
         if (playerLazy.isInitialized()) { player.pauseAtEndOfMediaItems = false; player.stop(); player.clearMediaItems() }
-        current = null; queueItems = emptyList(); extraSubs.clear(); error = null
+        current = null; queueItems = emptyList(); queueOrder = emptyList(); extraSubs.clear(); error = null
         _state.value = PlayerState(volume = volume)
+        com.omplayer.widget.OmWidgetState.update(appContext, null, false, 0L, 0L)
     }
 
     override fun release() {
         if (released) return
         released = true
+        com.omplayer.widget.OmWidgetState.update(appContext, null, false, 0L, 0L)
         if (instance === this) instance = null
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controllerFuture = null
@@ -470,3 +534,174 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
         player.release()
     }
 }
+
+/**
+ * Media3 requests ordinary HTTP byte ranges, while this resolver's CDN requires `?range=start-end`.
+ * Each request is streamed in bounded chunks; a seek simply opens a new DataSpec at its target offset.
+ */
+@OptIn(UnstableApi::class)
+private class YtdlQueryRangeDataSource(
+    private val upstreamFactory: DataSource.Factory,
+) : DataSource {
+    private val transferListeners = linkedSetOf<TransferListener>()
+    private var upstream: DataSource? = null
+    private var opened = false
+    private var resolvedStream: YtdlResolvedStream? = null
+    private var originalSpec: DataSpec? = null
+    private var originalUri: Uri? = null
+    private var requestBytesRemaining = 0L
+    private var chunkBytesRemaining = 0L
+    private var bytesRead = 0L
+
+    override fun addTransferListener(transferListener: TransferListener) {
+        if (transferListeners.add(transferListener)) upstream?.addTransferListener(transferListener)
+    }
+
+    override fun open(dataSpec: DataSpec): Long {
+        close()
+        val resolved = dataSpec.customData as? YtdlResolvedStream
+        if (resolved == null) {
+            val source = createUpstream()
+            upstream = source
+            opened = true
+            return try {
+                source.open(dataSpec)
+            } catch (error: Throwable) {
+                runCatching { source.close() }
+                upstream = null
+                opened = false
+                throw error
+            }
+        }
+
+        val uri = Uri.parse(resolved.url)
+        if (uri.scheme != "https" || uri.host.isNullOrBlank() || uri.getQueryParameter("range") != null) {
+            throw IOException("The resolved playback URL cannot be ranged safely.")
+        }
+        if (resolved.contentLength <= 0L) throw IOException("The resolved playback length is missing.")
+        if (dataSpec.position > resolved.contentLength) throw IOException("The requested playback position is past the end of the track.")
+
+        resolvedStream = resolved
+        originalSpec = dataSpec
+        originalUri = uri
+        bytesRead = 0L
+        requestBytesRemaining = if (dataSpec.length == C.LENGTH_UNSET.toLong()) {
+            resolved.contentLength - dataSpec.position
+        } else {
+            minOf(dataSpec.length, resolved.contentLength - dataSpec.position)
+        }.coerceAtLeast(0L)
+        opened = true
+        if (requestBytesRemaining > 0L) {
+            try {
+                openNextChunk()
+            } catch (error: Throwable) {
+                runCatching { close() }
+                throw error
+            }
+        }
+        return requestBytesRemaining
+    }
+
+    override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+        if (!opened) throw IOException("The playback data source is not open.")
+        if (length == 0) return 0
+        // Ordinary local/network media bypasses the YouTube range adapter entirely.
+        if (resolvedStream == null) {
+            return (upstream ?: throw IOException("The playback data source is not open.")).read(buffer, offset, length)
+        }
+        if (requestBytesRemaining == 0L) return C.RESULT_END_OF_INPUT
+        if (chunkBytesRemaining == 0L) {
+            closeUpstream()
+            openNextChunk()
+        }
+
+        val source = upstream ?: throw IOException("The playback range request is not open.")
+        val read = source.read(buffer, offset, minOf(length.toLong(), chunkBytesRemaining).toInt())
+        if (read == C.RESULT_END_OF_INPUT) throw IOException("The playback range ended before the expected byte count.")
+        if (read > 0) {
+            chunkBytesRemaining -= read
+            requestBytesRemaining -= read
+            bytesRead += read
+        }
+        return read
+    }
+
+    override fun getUri(): Uri? = if (resolvedStream != null) originalUri else upstream?.uri
+
+    override fun getResponseHeaders(): Map<String, List<String>> = upstream?.responseHeaders.orEmpty()
+
+    override fun close() {
+        val source = upstream
+        upstream = null
+        opened = false
+        resolvedStream = null
+        originalSpec = null
+        originalUri = null
+        requestBytesRemaining = 0L
+        chunkBytesRemaining = 0L
+        bytesRead = 0L
+        source?.close()
+    }
+
+    private fun openNextChunk() {
+        val stream = resolvedStream ?: throw IOException("No resolved playback URL is available.")
+        val spec = originalSpec ?: throw IOException("No playback request is available.")
+        val start = spec.position + bytesRead
+        val chunkLength = minOf(CHUNK_SIZE_BYTES, requestBytesRemaining)
+        if (chunkLength <= 0L) throw IOException("No playback bytes remain to request.")
+        val end = start + chunkLength - 1L
+        val rangeUri = checkNotNull(originalUri).buildUpon()
+            .appendQueryParameter("range", "$start-$end")
+            .build()
+        val headers = spec.httpRequestHeaders + discoverStreamHeaders(stream.consentCookie)
+        val rangeSpec = spec.buildUpon()
+            .setUri(rangeUri)
+            .setUriPositionOffset(spec.uriPositionOffset + start)
+            .setPosition(0L)
+            .setLength(C.LENGTH_UNSET.toLong())
+            .setHttpRequestHeaders(headers)
+            .setCustomData(null)
+            .build()
+        val source = createUpstream()
+        val reportedLength = try {
+            source.open(rangeSpec)
+        } catch (error: Throwable) {
+            runCatching { source.close() }
+            throw error
+        }
+        if (reportedLength != C.LENGTH_UNSET.toLong() && reportedLength != chunkLength) {
+            runCatching { source.close() }
+            throw IOException("The playback server returned a range with an unexpected byte count.")
+        }
+        upstream = source
+        chunkBytesRemaining = chunkLength
+    }
+
+    private fun createUpstream(): DataSource = upstreamFactory.createDataSource().also { source ->
+        transferListeners.forEach(source::addTransferListener)
+    }
+
+    private fun closeUpstream() {
+        val source = upstream
+        upstream = null
+        source?.close()
+    }
+
+    companion object {
+        private const val CHUNK_SIZE_BYTES = 10L * 1024L * 1024L
+    }
+}
+
+@OptIn(UnstableApi::class)
+private class YtdlQueryRangeDataSourceFactory(
+    private val upstreamFactory: DataSource.Factory,
+) : DataSource.Factory {
+    override fun createDataSource(): DataSource = YtdlQueryRangeDataSource(upstreamFactory)
+}
+
+private fun discoverStreamHeaders(consentCookie: String): Map<String, String> = mapOf(
+    "User-Agent" to "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip",
+    "Origin" to "https://youtube.com",
+    "Sec-Fetch-Mode" to "navigate",
+    "Cookie" to consentCookie,
+)

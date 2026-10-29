@@ -19,7 +19,10 @@ private val localImages = object : LruCache<String, ImageBitmap>(16 * 1024 * 102
 
 @Composable
 actual fun LocalImage(path: String, modifier: Modifier) {
-    val image by produceState(synchronized(localImages) { localImages.get(path) }, path) {
+    val initial = synchronized(localImages) { localImages.get(path) }
+    val image by produceState(initial, path) {
+        // produceState keeps its state when keys change, so explicitly replace the prior image.
+        value = initial
         if (value == null) value = withContext(Dispatchers.IO) {
             runCatching {
                 // Streamed tracks carry an artwork address instead of a file.

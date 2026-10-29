@@ -1,11 +1,17 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Properties
+import org.gradle.api.tasks.Exec
+import com.android.build.gradle.AppExtension
 
 // Release signing comes from the git-ignored local.properties (omplayer.release.*); never from tracked files.
 val localProps = Properties().apply {
     rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
 }
+val ytdlGoJniLibs = layout.buildDirectory.dir("generated/ytdlGo/jniLibs")
+val ytdlGoBinary = providers.gradleProperty("goBinary")
+    .orElse(providers.environmentVariable("GO_BINARY"))
+    .orElse("go")
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -82,6 +88,15 @@ android {
             manifestPlaceholders["appLabel"] = "OM Player+"
         }
     }
+    sourceSets.getByName("plus").jniLibs.srcDir(ytdlGoJniLibs)
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            isUniversalApk = false
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -110,6 +125,27 @@ android {
     }
     packaging {
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
+        // The Plus bridge is a packaged executable in jniLibs, so it must be extracted before launch.
+        jniLibs { useLegacyPackaging = true }
+    }
+}
+
+val androidSdkPath = (extensions.getByName("android") as AppExtension).sdkDirectory.absolutePath
+val buildYtdlGoAndroid = tasks.register<Exec>("buildYtdlGoAndroid") {
+    inputs.files(rootProject.fileTree("tools/ytdl-go"))
+    outputs.dir(ytdlGoJniLibs)
+    commandLine(
+        "bash",
+        rootProject.file("tools/ytdl-go/build-android.sh").absolutePath,
+        ytdlGoJniLibs.get().asFile.absolutePath,
+        ytdlGoBinary.get(),
+        androidSdkPath,
+    )
+}
+
+tasks.configureEach {
+    if (name.startsWith("mergePlus") && (name.endsWith("NativeLibs") || name.endsWith("JniLibFolders"))) {
+        dependsOn(buildYtdlGoAndroid)
     }
 }
 

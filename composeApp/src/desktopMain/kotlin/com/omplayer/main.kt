@@ -102,7 +102,7 @@ fun main(args: Array<String>) {
                 lyrics = com.omplayer.data.LrcLibLyrics(),
                 covers = com.omplayer.data.MusicBrainzCovers(),
                 // Discover (online music) is off in the public desktop builds. Turn it on for yourself with OMPLAYER_DISCOVER=1.
-                online = if (System.getenv("OMPLAYER_DISCOVER") == "1") com.omplayer.data.AudiusSource() else com.omplayer.data.NoOnlineMusic,
+                sources = emptyList(),
             )
         }
         val openRequests = remember { openChannel.receiveAsFlow() }

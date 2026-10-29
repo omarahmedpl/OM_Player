@@ -9,6 +9,10 @@ import android.os.Build
 import android.os.CancellationSignal
 import android.util.LruCache
 import android.util.Size
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 import androidx.compose.foundation.Image
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -47,10 +51,74 @@ private object AudioArtworkCache {
 
 private val audioArtworkLoads = Semaphore(2)
 
+/** Shares the audio artwork cache and bounded embedded-art loader with the home-screen widget. */
+internal suspend fun loadWidgetArtwork(context: Context, address: String, embeddedMedia: Boolean): Bitmap? =
+    audioArtworkLoads.withPermit {
+        withContext(Dispatchers.IO) {
+            AudioArtworkCache.get(address) ?: if (AudioArtworkCache.wasMissing(address)) null else {
+                val artwork = when {
+                    address.startsWith("http://") || address.startsWith("https://") -> loadRemoteArtwork(address)
+                    embeddedMedia || address.startsWith("content://") -> loadAudioArtwork(context, Uri.parse(address))
+                    else -> loadLocalArtwork(address)
+                }
+                if (artwork != null) AudioArtworkCache.put(address, artwork) else AudioArtworkCache.markMissing(address)
+                artwork
+            }
+        }
+    }
+
+private fun loadLocalArtwork(address: String): Bitmap? = runCatching {
+    val path = if (address.startsWith("file://")) Uri.parse(address).path else address
+    val file = path?.let(::File)?.takeIf(File::isFile) ?: return null
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(file.absolutePath, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    var sample = 1
+    while (bounds.outWidth / sample > 512 || bounds.outHeight / sample > 512) sample *= 2
+    BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample })
+}.getOrNull()
+
+private fun loadRemoteArtwork(address: String): Bitmap? {
+    val connection = (URL(address).openConnection() as? HttpURLConnection) ?: return null
+    return try {
+        connection.connectTimeout = 3_500
+        connection.readTimeout = 3_500
+        connection.instanceFollowRedirects = true
+        connection.setRequestProperty("Accept", "image/*")
+        val length = connection.contentLengthLong
+        if (length > 5L * 1024 * 1024) return null
+        val bytes = connection.inputStream.use { input ->
+            val out = ByteArrayOutputStream(length.takeIf { it > 0 }?.toInt() ?: 32 * 1024)
+            val buffer = ByteArray(8 * 1024)
+            var total = 0
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                total += count
+                if (total > 5 * 1024 * 1024) return null
+                out.write(buffer, 0, count)
+            }
+            out.toByteArray()
+        }
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        var sample = 1
+        while (bounds.outWidth / sample > 512 || bounds.outHeight / sample > 512) sample *= 2
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+    } catch (_: Exception) {
+        null
+    } finally {
+        connection.disconnect()
+    }
+}
+
 @Composable
 actual fun VideoThumbnail(uri: String, modifier: Modifier) {
     val context = LocalContext.current
-    val bitmap by produceState(VideoThumbnailCache.get(uri), uri) {
+    val initial = VideoThumbnailCache.get(uri)
+    val bitmap by produceState(initial, uri) {
+        value = initial
         if (value == null) {
             value = withContext(Dispatchers.IO) {
                 VideoThumbnailCache.get(uri) ?: loadThumbnail(context, Uri.parse(uri))?.also {
@@ -65,7 +133,9 @@ actual fun VideoThumbnail(uri: String, modifier: Modifier) {
 @Composable
 actual fun AudioArtwork(uri: String, modifier: Modifier) {
     val context = LocalContext.current
-    val bitmap by produceState(AudioArtworkCache.get(uri), uri) {
+    val initial = AudioArtworkCache.get(uri)
+    val bitmap by produceState(initial, uri) {
+        value = initial
         if (value == null && !AudioArtworkCache.wasMissing(uri)) {
             value = audioArtworkLoads.withPermit {
                 withContext(Dispatchers.IO) {

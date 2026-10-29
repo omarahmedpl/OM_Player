@@ -25,6 +25,8 @@ import com.omplayer.ui.library.LibraryRoot
 import com.omplayer.data.LibraryState
 import com.omplayer.data.SavedSession
 import com.omplayer.data.withEdit
+import com.omplayer.data.toMediaItem
+import com.omplayer.data.toMediaItems
 import com.omplayer.ui.player.AudioNowPlaying
 import com.omplayer.ui.player.PlayerScreen
 import androidx.compose.animation.slideInVertically
@@ -142,8 +144,9 @@ private fun AudioProgressSaver(deps: AppDeps) {
                 deps.progress.save(item.id, s.positionMs, s.durationMs)
             }
             // The last session (queue, track, position) is kept so the app can offer it again after a restart.
-            // Streamed tracks aren't kept: they aren't in the device library.
-            if (s.queue.isNotEmpty() && s.queueIndex >= 0 && s.queue.none { it.uri.startsWith("http") } &&
+            // Streamed queues are kept too: their entries are page addresses that the player resolves as each
+            // one starts, so next and previous still work after a restart.
+            if (s.queue.isNotEmpty() && s.queueIndex >= 0 &&
                 (changedTrack || paused || s.positionMs - lastSessionSave !in -5_000L..5_000L)
             ) {
                 lastSessionSave = s.positionMs
@@ -166,7 +169,11 @@ private fun RestoreLastSession(deps: AppDeps, enabled: Boolean, busy: () -> Bool
         if (deps.engine.state.value.item != null || busy()) return@LaunchedEffect
         val edits = deps.userData.edits.value
         val byId = ready.folders.flatMap { it.items }.filter { it.isAudio }.associateBy { it.id }
-        val items = saved.ids.mapNotNull { id -> byId[id]?.withEdit(edits[id]) }
+        val downloaded = deps.downloads?.library?.value?.toMediaItems()?.associateBy { it.id }.orEmpty()
+        // A streamed entry is rebuilt from the catalogue details kept when it was played or favourited.
+        val items = saved.ids.mapNotNull { id ->
+            byId[id]?.withEdit(edits[id]) ?: downloaded[id] ?: deps.onlineTracks.byId(id)?.toMediaItem()
+        }
         val current = saved.ids[saved.index]
         val index = items.indexOfFirst { it.id == current }
         if (index < 0) return@LaunchedEffect // the song is gone from the device

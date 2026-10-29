@@ -40,6 +40,8 @@ data class PlayerState(
     /** Playlist loaded with [PlayerEngine.openQueue]; [item] is `queue[queueIndex]`. Empty for single-item playback. */
     val queue: List<MediaItem> = emptyList(),
     val queueIndex: Int = -1,
+    /** Original queue indexes in actual playback traversal order, for queue display and selection. */
+    val queueOrder: List<Int> = emptyList(),
     /** Sleep timer: wall-clock end (0 = none) or pause at the end of the current track. */
     val sleepEndsAtMs: Long = 0,
     val sleepAtTrackEnd: Boolean = false,
@@ -48,6 +50,13 @@ data class PlayerState(
     /** True when [PlayerEngine.skipNext] has somewhere to go (respects repeat and shuffle). */
     val hasNext: Boolean = false,
 )
+
+/** Uses a supplied player traversal while keeping a complete, valid mapping to original queue indexes. */
+internal fun queueDisplayOrder(size: Int, traversal: List<Int>): List<Int> {
+    if (size <= 0) return emptyList()
+    val valid = traversal.filter { it in 0 until size }.distinct()
+    return valid + (0 until size).filterNot(valid::contains)
+}
 
 /**
  * The playback engine behind the shared UI.

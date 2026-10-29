@@ -133,11 +133,18 @@ internal fun MusicHome(all: List<MediaItem>, folders: List<com.omplayer.model.Me
     val shufflePlay = rememberShufflePlay(actions)
 
     Column(Modifier.fillMaxSize()) {
+        // Discover is its own destination now; Downloaded stays here because it is local files.
+        val tabs = remember(deps.downloads) {
+            buildList {
+                addAll(listOf("Songs", "Artists", "Albums", "Folders", "Favourites", "Playlists"))
+                if (deps.downloads != null) add("Downloaded")
+            }
+        }
         Row(
             Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = contentPad()).padding(top = OmSpace.s1),
             horizontalArrangement = Arrangement.spacedBy(OmSpace.s2),
         ) {
-            listOfNotNull("Songs", "Artists", "Albums", "Folders", "Favourites", "Playlists", if (deps.online !== NoOnlineMusic) "Discover" else null).forEachIndexed { i, label ->
+            tabs.forEachIndexed { i, label ->
                 OmChip(label, tab == i, { tab = i; openId = null; openGroup = null; selected = emptySet() })
             }
         }
@@ -199,7 +206,7 @@ internal fun MusicHome(all: List<MediaItem>, folders: List<com.omplayer.model.Me
                             onDelete = { deleteTarget = listOf(open) },
                         )
                     }
-                    else -> OnlineMusicScreen(actions)
+                    else -> if (tabs.getOrNull(tab) == "Downloaded") DownloadedScreen(actions)
                 }
             }
         }

@@ -26,6 +26,8 @@ enum class ScreenOrientation { Auto, Landscape, Portrait }
 /** Platform hooks the shared UI may call. Every method is safe to call on any platform (no-op where unsupported). */
 interface PlatformActions {
     val formFactor: FormFactor
+    /** Emits when an external shortcut asks the library to show Discover. */
+    val openDiscoverRequests: Flow<Unit> get() = emptyFlow()
     /** Window brightness for the player, 0f..1f, or null to restore the system value. */
     fun setPlayerBrightness(value: Float?) {}
     fun enterPictureInPicture() {}
@@ -47,11 +49,12 @@ interface PlatformActions {
     fun pickImage(onResult: (path: String?) -> Unit) { onResult(null) }
     /** Scale image [bytes] down and keep them in app storage as a cover; returns the file path, or null. Call off the main thread. */
     fun saveCoverImage(bytes: ByteArray): String? = null
+    /** Deletes a downloaded file from app storage. Returns true when the file is gone. */
+    fun deleteFile(path: String): Boolean = false
     /** Share playlists (names and song titles) as a JSON file or a PNG image. Returns false when the platform can't. */
     fun sharePlaylists(lists: List<SharedPlaylist>, format: ShareFormat): Boolean = false
     /** Called when audio playback starts so the platform can start its background service / ask for notifications. */
-    fun onAudioPlaybackStarted() {}
-    /** True while the app runs in a picture-in-picture window; the player hides its controls. */
+    fun onAudioPlaybackStarted() {}    /** True while the app runs in a picture-in-picture window; the player hides its controls. */
     val inPictureInPicture: StateFlow<Boolean> get() = NotInPip
     /** Desktop: the window's real fullscreen state (it can also change outside the player, e.g. Esc at window level). */
     val windowFullscreen: StateFlow<Boolean> get() = NotInPip
@@ -73,8 +76,14 @@ class AppDeps(
     val lyrics: com.omplayer.data.LyricsProvider = com.omplayer.data.NoLyrics,
     /** Looks up cover art online. */
     val covers: com.omplayer.data.CoverProvider = com.omplayer.data.NoCovers,
-    /** A catalogue of freely streamable music (Discover). */
-    val online: com.omplayer.data.OnlineMusicSource = com.omplayer.data.NoOnlineMusic,
+    /** Online catalogues offered in Discover. Empty means no Discover tab (lite, and desktop). */
+    val sources: List<com.omplayer.data.OnlineMusicSource> = emptyList(),
+    /** Runs downloads; null where downloads aren't available. */
+    val downloads: com.omplayer.data.DownloadManager? = null,
+    /** Catalogue details of online tracks the user played or kept, so they survive a restart. */
+    val onlineTracks: com.omplayer.data.OnlineTrackStore = com.omplayer.data.OnlineTrackStore(),
+    /** Favourites and playlists for online tracks, kept separate from the device library. */
+    val onlineLibrary: com.omplayer.data.OnlineLibrary = com.omplayer.data.OnlineLibrary(),
     /** The last audio session, offered again (paused) when the app starts. */
     val session: com.omplayer.data.SessionStore = com.omplayer.data.SessionStore(),
 )

@@ -34,6 +34,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.PlaylistAdd
@@ -93,6 +94,8 @@ internal sealed interface Dest {
     data object Home : Dest
     data object Videos : Dest
     data object Music : Dest
+    /** Online music: only offered by editions that have sources (plus). */
+    data object Discover : Dest
     data object Folders : Dest
     data object Network : Dest
     data object Settings : Dest
@@ -121,6 +124,11 @@ fun LibraryRoot(
     LaunchedEffect(Unit) { repo.refresh() }
 
     var dest by remember { mutableStateOf<Dest>(if (desktop) Dest.Home else Dest.Videos) }
+    LaunchedEffect(deps.platform) {
+        deps.platform.openDiscoverRequests.collect {
+            if (deps.sources.isNotEmpty()) dest = Dest.Discover
+        }
+    }
     var query by remember { mutableStateOf("") }
     var searchOpen by remember { mutableStateOf(false) }
     var prefs by remember { mutableStateOf(ListPrefs()) }
@@ -305,6 +313,7 @@ private fun titleFor(dest: Dest, folders: List<MediaFolder>) = when (dest) {
     Dest.Home -> "Home"
     Dest.Videos -> "Videos"
     Dest.Music -> "Music"
+    Dest.Discover -> "Discover"
     Dest.Folders -> "Folders"
     Dest.Network -> "Network stream"
     Dest.Settings -> "Settings"
@@ -321,10 +330,11 @@ private fun Body(
     val repo = LocalAppDeps.current.repository
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val refresh: () -> Unit = { scope.launch { repo.refresh() } }
-    // Settings and Network don't depend on library state.
+    // Settings, Network and Discover don't depend on library state.
     when (dest) {
         Dest.Settings -> { SettingsScreen(settings, onSettingsChange); return }
         Dest.Network -> { NetworkScreen(recentUrls, onRecentUrls, onPlay); return }
+        Dest.Discover -> { DiscoverHome(actions); return }
         else -> {}
     }
     when (state) {
@@ -388,14 +398,18 @@ private fun PhoneTopBar(
             canBack -> {
                 OmIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onBack)
                 OmText(title, size = 20.sp, weight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                OmIconButton(Icons.Rounded.Search, "Search", onOpenSearch)
-                if (showControls) ViewControls(prefs, onPrefs)
+                if (showControls) {
+                    OmIconButton(Icons.Rounded.Search, "Search", onOpenSearch)
+                    ViewControls(prefs, onPrefs)
+                }
             }
             else -> {
                 if (title == "Videos") OmWordmark(modifier = Modifier.padding(start = OmSpace.s2).weight(1f))
                 else OmText(title, size = 22.sp, weight = FontWeight.SemiBold, modifier = Modifier.padding(start = OmSpace.s2).weight(1f))
-                OmIconButton(Icons.Rounded.Search, "Search", onOpenSearch)
-                if (showControls) ViewControls(prefs, onPrefs)
+                if (showControls) {
+                    OmIconButton(Icons.Rounded.Search, "Search", onOpenSearch)
+                    ViewControls(prefs, onPrefs)
+                }
             }
         }
     }
@@ -404,12 +418,14 @@ private fun PhoneTopBar(
 @Composable
 private fun BottomNav(dest: Dest, onSelect: (Dest) -> Unit) {
     val c = OmTheme.colors
-    val items = listOf(
-        NavItem(Dest.Videos, "Videos", Icons.Rounded.VideoLibrary),
-        NavItem(Dest.Music, "Music", Icons.Rounded.MusicNote),
-        NavItem(Dest.Network, "Network", Icons.Rounded.Public),
-        NavItem(Dest.Settings, "Settings", Icons.Rounded.Settings),
-    )
+    val items = buildList {
+        add(NavItem(Dest.Videos, "Videos", Icons.Rounded.VideoLibrary))
+        add(NavItem(Dest.Music, "Music", Icons.Rounded.MusicNote))
+        // Discover is its own destination, and only exists where the edition has online sources.
+        if (LocalAppDeps.current.sources.isNotEmpty()) add(NavItem(Dest.Discover, "Discover", Icons.Rounded.Explore))
+        add(NavItem(Dest.Network, "Network", Icons.Rounded.Public))
+        add(NavItem(Dest.Settings, "Settings", Icons.Rounded.Settings))
+    }
     val current = if (dest is Dest.Folder) Dest.Videos else dest
     Column(Modifier.fillMaxWidth().background(c.surface1)) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.hairline))

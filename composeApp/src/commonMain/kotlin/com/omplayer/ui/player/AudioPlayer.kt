@@ -3,9 +3,12 @@ package com.omplayer.ui.player
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.launch
 import androidx.compose.animation.core.tween
@@ -56,8 +59,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -68,9 +73,11 @@ import com.omplayer.LocalAppDeps
 import com.omplayer.PlatformBackHandler
 import com.omplayer.data.LibraryState
 import com.omplayer.data.isStreamed
+import com.omplayer.data.toOnlineTrack
 import com.omplayer.model.MediaItem
 import com.omplayer.player.PlayerState
 import com.omplayer.player.RepeatMode
+import com.omplayer.player.queueDisplayOrder
 import com.omplayer.ui.library.EditSongDialog
 import com.omplayer.ui.library.PlaylistPicker
 import com.omplayer.theme.DarkColors
@@ -85,6 +92,7 @@ import com.omplayer.ui.components.ProgressBar
 import com.omplayer.ui.components.ThumbnailPlaceholder
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.collectAsState
+import kotlin.math.abs
 
 @OptIn(kotlin.time.ExperimentalTime::class)
 private fun nowMs(): Long = kotlin.time.Clock.System.now().toEpochMilliseconds()
@@ -92,6 +100,52 @@ private fun nowMs(): Long = kotlin.time.Clock.System.now().toEpochMilliseconds()
 private enum class AudioPanel { Speed, Sleep, Queue, Playlists }
 
 private fun MediaItem.subtitle(fallback: String): String = artist.ifBlank { fallback }
+
+internal enum class AudioSwipeAxis { Horizontal, Vertical }
+internal enum class AudioTrackDirection { Previous, Next }
+
+internal fun audioSwipeAxis(dx: Float, dy: Float, slop: Float): AudioSwipeAxis? =
+    if (dx * dx + dy * dy <= slop * slop) null
+    else if (abs(dx) > abs(dy)) AudioSwipeAxis.Horizontal else AudioSwipeAxis.Vertical
+
+internal fun audioTrackDirection(dx: Float, threshold: Float): AudioTrackDirection? = when {
+    dx <= -threshold -> AudioTrackDirection.Next
+    dx >= threshold -> AudioTrackDirection.Previous
+    else -> null
+}
+
+/** Locks to the first axis that crosses touch slop; vertical cover drags remain the minimize gesture. */
+private fun Modifier.audioTrackSwipes(onNext: () -> Unit, onPrevious: () -> Unit): Modifier = composed {
+    val next by rememberUpdatedState(onNext)
+    val previous by rememberUpdatedState(onPrevious)
+    pointerInput(Unit) {
+        val slop = viewConfiguration.touchSlop
+        val threshold = 56.dp.toPx()
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            var axis: AudioSwipeAxis? = null
+            var dx = 0f
+            while (true) {
+                val event = awaitPointerEvent()
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                dx = change.position.x - down.position.x
+                val dy = change.position.y - down.position.y
+                if (axis == null) axis = audioSwipeAxis(dx, dy, slop)
+                if (axis == AudioSwipeAxis.Horizontal) change.consume()
+                if (!change.pressed) {
+                    if (axis == AudioSwipeAxis.Horizontal) {
+                        when (audioTrackDirection(dx, threshold)) {
+                            AudioTrackDirection.Next -> next()
+                            AudioTrackDirection.Previous -> previous()
+                            null -> Unit
+                        }
+                    }
+                    break
+                }
+            }
+        }
+    }
+}
 
 /** Full-screen audio player. Reads and drives the one shared engine; no video chrome. Always dark, like the video player. */
 @Composable
@@ -151,12 +205,23 @@ private fun AudioNowPlayingContent(onCollapse: () -> Unit) {
                 if (wide) {
                     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(OmSpace.s6), verticalAlignment = Alignment.CenterVertically) {
                         if (showLyrics) LyricsView(item, st.positionMs, { engine.seekTo(it) }, { showEdit = true }, Modifier.fillMaxHeight(0.85f).aspectRatio(1f))
-                        else Artwork(item, artScale, Modifier.fillMaxHeight(0.85f).aspectRatio(1f).then(dragToMinimize))
+                        else Artwork(
+                            item, artScale,
+                            Modifier.fillMaxHeight(0.85f).aspectRatio(1f).then(dragToMinimize)
+                                .audioTrackSwipes({ if (hasNext) engine.skipNext() }, { engine.skipPrevious() }),
+                        )
                         Controls(st, item, hasNext, sleepMinutes, { panel = it }, Modifier.weight(1f))
                     }
                 } else {
                     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(Modifier.weight(1f).fillMaxWidth().then(if (showLyrics) Modifier else dragToMinimize), contentAlignment = Alignment.Center) {
+                        Box(
+                            Modifier.weight(1f).fillMaxWidth().then(
+                                if (showLyrics) Modifier else dragToMinimize.audioTrackSwipes(
+                                    { if (hasNext) engine.skipNext() }, { engine.skipPrevious() },
+                                ),
+                            ),
+                            contentAlignment = Alignment.Center,
+                        ) {
                             if (showLyrics) LyricsView(item, st.positionMs, { engine.seekTo(it) }, { showEdit = true })
                             else Artwork(item, artScale, Modifier.widthIn(max = 420.dp).fillMaxWidth().aspectRatio(1f))
                         }
@@ -215,8 +280,12 @@ private fun Controls(
     val folder = (library as? LibraryState.Ready)?.folders?.firstOrNull { it.id == item.folderId }?.name.orEmpty()
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         val lib = LocalAppDeps.current.userData
+        val deps = LocalAppDeps.current
         val favorites by lib.favorites.collectAsState()
-        val fav = item.id in favorites
+        val onlineFavorites by deps.onlineLibrary.favorites.collectAsState()
+        // Streamed tracks keep their own favourites, separate from songs on this device.
+        val online = item.isStreamed
+        val fav = if (online) item.id in onlineFavorites else item.id in favorites
         Row(Modifier.fillMaxWidth().padding(top = OmSpace.s4), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
@@ -228,11 +297,19 @@ private fun Controls(
                     overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = OmSpace.s1),
                 )
             }
-            // Favourites and playlists hold songs from this device, so streamed tracks don't get them.
-            if (!item.isStreamed) PIconButton(
+            // Streamed tracks are favourited in Discover, which keeps its own list.
+            PIconButton(
                 if (fav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                 if (fav) "Remove from favourites" else "Add to favourites",
-                { lib.toggleFavorite(item.id) }, tint = if (fav) c.primaryHover else c.onVideo,
+                {
+                    if (online) {
+                        deps.onlineTracks.remember(item.toOnlineTrack())
+                        deps.onlineLibrary.toggleFavorite(item.id)
+                    } else {
+                        lib.toggleFavorite(item.id)
+                    }
+                },
+                tint = if (fav) c.primaryHover else c.onVideo,
             )
         }
         Spacer(Modifier.size(OmSpace.s4))
@@ -301,10 +378,12 @@ private fun SleepPanel(st: PlayerState, selectedMinutes: Int?, onPick: (minutes:
 private fun QueuePanel(st: PlayerState, onPick: (Int) -> Unit) {
     val c = OmTheme.colors
     if (st.queue.isEmpty()) Text("Nothing queued", color = c.text3, fontSize = 14.sp, modifier = Modifier.padding(OmSpace.s4))
-    st.queue.forEachIndexed { i, q ->
-        val current = i == st.queueIndex
+    val order = queueDisplayOrder(st.queue.size, st.queueOrder)
+    order.forEach { queueIndex ->
+        val q = st.queue[queueIndex]
+        val current = queueIndex == st.queueIndex
         Row(
-            Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(role = Role.Button) { onPick(i) }
+            Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(role = Role.Button) { onPick(queueIndex) }
                 .padding(horizontal = OmSpace.s4, vertical = OmSpace.s2),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -332,7 +411,9 @@ fun MiniPlayer(onExpand: () -> Unit, modifier: Modifier = Modifier) {
     Column(modifier.fillMaxWidth().background(c.surface2)) {
         ProgressBar(if (st.durationMs > 0) st.positionMs.toFloat() / st.durationMs else 0f, height = 2.dp)
         Row(
-            Modifier.fillMaxWidth().clickable(role = Role.Button, onClickLabel = "Open player", onClick = onExpand)
+            Modifier.fillMaxWidth()
+                .audioTrackSwipes({ if (hasNext) engine.skipNext() }, { engine.skipPrevious() })
+                .clickable(role = Role.Button, onClickLabel = "Open player", onClick = onExpand)
                 .padding(start = OmSpace.s3, end = OmSpace.s1, top = OmSpace.s1, bottom = OmSpace.s1),
             verticalAlignment = Alignment.CenterVertically,
         ) {

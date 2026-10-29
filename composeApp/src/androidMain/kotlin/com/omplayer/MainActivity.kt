@@ -30,6 +30,10 @@ private const val SPLASH_MIN_MS = 1500L
 private const val SPLASH_FADE_MS = 450L
 
 class MainActivity : ComponentActivity() {
+    private companion object {
+        @Volatile private var processDownloads: com.omplayer.data.DownloadManager? = null
+    }
+
     private lateinit var engine: Media3PlayerEngine
     private lateinit var repository: MediaStoreRepository
     private lateinit var actions: AndroidPlatformActions
@@ -158,8 +162,26 @@ class MainActivity : ComponentActivity() {
                 if (Build.VERSION.SDK_INT >= 33) notificationLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
             },
         )
+        val sources = if (BuildConfig.DISCOVER) listOf<com.omplayer.data.OnlineMusicSource>(com.omplayer.data.YtdlGoSource(applicationContext)) else emptyList()
+        // Lets the player turn a Discover page address into a playable one as each track starts.
+        if (BuildConfig.DISCOVER) {
+            val yt = sources.firstOrNull() as? com.omplayer.data.YtdlGoSource
+            com.omplayer.player.StreamResolver.resolve =
+                if (yt == null) null else { page: String -> yt.resolveBlocking(page) }
+        }
+        val downloads = if (BuildConfig.DISCOVER) processDownloads ?: synchronized(MainActivity::class.java) {
+            processDownloads ?: com.omplayer.data.DownloadManager(
+                com.omplayer.data.DownloadStore(com.omplayer.data.PrefsTextStorage(applicationContext, "om_downloads")),
+                sources,
+                java.io.File(applicationContext.filesDir, "downloads").absolutePath,
+                now = { System.currentTimeMillis() },
+                fileSize = { java.io.File(it).length() },
+            ).also { processDownloads = it }
+        } else null
         val deps = AppDeps(repository, PersistentProgressStore(this), engine, actions, com.omplayer.data.UserLibrary(com.omplayer.data.PrefsTextStorage(this)), com.omplayer.data.LrcLibLyrics(), com.omplayer.data.MusicBrainzCovers(),
-            if (BuildConfig.DISCOVER) com.omplayer.data.AudiusSource() else com.omplayer.data.NoOnlineMusic,
+            sources, downloads,
+            com.omplayer.data.OnlineTrackStore(com.omplayer.data.PrefsTextStorage(this, "om_online_tracks")),
+            com.omplayer.data.OnlineLibrary(com.omplayer.data.PrefsTextStorage(this, "om_online_library")),
             com.omplayer.data.SessionStore(com.omplayer.data.PrefsTextStorage(this, "om_session")))
         mark("deps")
 
@@ -199,6 +221,38 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleIntent(intent: Intent?) {
+        when (intent?.getStringExtra(com.omplayer.widget.WidgetIntents.EXTRA_ACTION)) {
+            com.omplayer.widget.WidgetIntents.OPEN_DISCOVER -> actions.requestDiscover()
+            com.omplayer.widget.WidgetIntents.TOGGLE,
+            com.omplayer.widget.WidgetIntents.NEXT,
+            com.omplayer.widget.WidgetIntents.PREVIOUS -> {
+                val action = intent.getStringExtra(com.omplayer.widget.WidgetIntents.EXTRA_ACTION)
+                val current = engine.state.value.item
+                if (current?.isAudio == true) {
+                    when (action) {
+                        com.omplayer.widget.WidgetIntents.TOGGLE -> engine.togglePlay()
+                        com.omplayer.widget.WidgetIntents.NEXT -> engine.skipNext()
+                        com.omplayer.widget.WidgetIntents.PREVIOUS -> engine.skipPrevious()
+                    }
+                } else if (intent.hasExtra(com.omplayer.widget.WidgetIntents.EXTRA_ACTION)) {
+                    // A process-death launch may still be restoring the last audio session.
+                    lifecycleScope.launch {
+                        repeat(80) {
+                            val item = engine.state.value.item
+                            if (item?.isAudio == true) {
+                                when (action) {
+                                    com.omplayer.widget.WidgetIntents.TOGGLE -> engine.togglePlay()
+                                    com.omplayer.widget.WidgetIntents.NEXT -> engine.skipNext()
+                                    com.omplayer.widget.WidgetIntents.PREVIOUS -> engine.skipPrevious()
+                                }
+                                return@launch
+                            }
+                            kotlinx.coroutines.delay(100)
+                        }
+                    }
+                }
+            }
+        }
         if (intent?.action != Intent.ACTION_VIEW) return
         val uri = intent.data ?: return
         openRequests.tryEmit(MediaItem(

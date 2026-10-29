@@ -34,8 +34,14 @@ class AndroidPlatformActions(
     private val launchTextPicker: (onResult: (String?) -> Unit) -> Unit,
     private val launchImagePicker: (onResult: (String?) -> Unit) -> Unit,
 ) : PlatformActions {
+    private val discoverRequests = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 1)
+    override val openDiscoverRequests: Flow<Unit> = discoverRequests.asSharedFlow()
+    fun requestDiscover() { discoverRequests.tryEmit(Unit) }
+
     override fun pickImage(onResult: (String?) -> Unit) = launchImagePicker(onResult)
     override fun saveCoverImage(bytes: ByteArray): String? = CoverStore.save(activity.filesDir, bytes)
+
+    override fun deleteFile(path: String): Boolean = runCatching { java.io.File(path).delete() }.getOrDefault(false)
 
     override fun pickTextFile(onResult: (String?) -> Unit) = launchTextPicker(onResult)
 
