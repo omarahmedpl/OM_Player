@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.omplayer.LocalAppDeps
 import com.omplayer.PlatformBackHandler
+import com.omplayer.data.NoOnlineMusic
 import com.omplayer.data.Playlist
 import com.omplayer.data.PlaylistExport
 import com.omplayer.model.MediaItem
@@ -136,7 +137,7 @@ internal fun MusicHome(all: List<MediaItem>, folders: List<com.omplayer.model.Me
             Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = contentPad()).padding(top = OmSpace.s1),
             horizontalArrangement = Arrangement.spacedBy(OmSpace.s2),
         ) {
-            listOf("Songs", "Artists", "Albums", "Folders", "Favourites", "Playlists").forEachIndexed { i, label ->
+            listOfNotNull("Songs", "Artists", "Albums", "Folders", "Favourites", "Playlists", if (deps.online !== NoOnlineMusic) "Discover" else null).forEachIndexed { i, label ->
                 OmChip(label, tab == i, { tab = i; openId = null; openGroup = null; selected = emptySet() })
             }
         }
@@ -169,7 +170,7 @@ internal fun MusicHome(all: List<MediaItem>, folders: List<com.omplayer.model.Me
                             ItemList(favs, prefs, actions, Modifier.fillMaxSize())
                         }
                     }
-                    else -> {
+                    5 -> {
                         val open = playlists.firstOrNull { it.id == openId }
                         if (open == null) PlaylistList(
                             playlists, selected, listState,
@@ -198,6 +199,7 @@ internal fun MusicHome(all: List<MediaItem>, folders: List<com.omplayer.model.Me
                             onDelete = { deleteTarget = listOf(open) },
                         )
                     }
+                    else -> OnlineMusicScreen(actions)
                 }
             }
         }

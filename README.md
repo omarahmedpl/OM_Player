@@ -47,7 +47,7 @@ You need JDK 21. The Android build also needs the Android SDK (API 36); put its 
 
 ```bash
 ./gradlew :composeApp:run                  # desktop app (needs VLC 3.x installed)
-./gradlew :composeApp:assembleDebug        # Android APK, composeApp/build/outputs/apk/debug/
+./gradlew :composeApp:assembleLiteDebug    # Android APK, composeApp/build/outputs/apk/lite/debug/
 ./gradlew :composeApp:desktopTest          # unit tests
 packaging/linux/build-deb.sh               # Linux .deb into dist/
 ./gradlew :composeApp:packageMsi           # Windows MSI (run on Windows with WiX 3 installed)

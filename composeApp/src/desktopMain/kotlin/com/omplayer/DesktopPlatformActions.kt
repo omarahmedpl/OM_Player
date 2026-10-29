@@ -87,6 +87,17 @@ class DesktopPlatformActions(private val windowState: WindowState) : PlatformAct
         onResult(if (f == null) null else runCatching { java.io.File(dialog.directory, f).takeIf { it.length() <= 2_000_000 }?.readText() }.getOrNull())
     }
 
+    override fun saveCoverImage(bytes: ByteArray): String? = runCatching {
+        val src = javax.imageio.ImageIO.read(java.io.ByteArrayInputStream(bytes)) ?: return@runCatching null
+        val scale = minOf(1.0, 640.0 / maxOf(src.width, src.height))
+        val w = maxOf(1, (src.width * scale).toInt()); val h = maxOf(1, (src.height * scale).toInt())
+        val out = java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB)
+        out.createGraphics().apply { setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR); drawImage(src, 0, 0, w, h, null); dispose() }
+        val file = java.io.File(com.omplayer.data.AppDirs.config, "covers").apply { mkdirs() }.let { java.io.File(it, "cover_${System.currentTimeMillis()}.jpg") }
+        javax.imageio.ImageIO.write(out, "jpg", file)
+        file.absolutePath
+    }.getOrNull()
+
     override fun pickImage(onResult: (String?) -> Unit) {
         val dialog = FileDialog(null as Frame?, "Choose a cover image", FileDialog.LOAD)
         dialog.isVisible = true

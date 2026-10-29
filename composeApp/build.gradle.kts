@@ -62,8 +62,25 @@ android {
         applicationId = "com.omplayer"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
+        versionCode = 6
         versionName = "1.0.0"
+    }
+    buildFeatures { buildConfig = true }
+    // Two editions. "lite" is the public one. "plus" adds the Discover tab (online music) and installs as a separate app.
+    flavorDimensions += "edition"
+    productFlavors {
+        create("lite") {
+            dimension = "edition"
+            buildConfigField("boolean", "DISCOVER", "false")
+            manifestPlaceholders["appLabel"] = "OM Player"
+        }
+        create("plus") {
+            dimension = "edition"
+            applicationIdSuffix = ".plus"
+            versionNameSuffix = "-plus"
+            buildConfigField("boolean", "DISCOVER", "true")
+            manifestPlaceholders["appLabel"] = "OM Player+"
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

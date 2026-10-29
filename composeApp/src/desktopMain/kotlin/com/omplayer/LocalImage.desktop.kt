@@ -15,7 +15,7 @@ import kotlinx.coroutines.withContext
 @Composable
 actual fun LocalImage(path: String, modifier: Modifier) {
     val image by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, path) {
-        value = withContext(Dispatchers.IO) { runCatching { ImageIO.read(File(path))?.toComposeImageBitmap() }.getOrNull() }
+        value = withContext(Dispatchers.IO) { runCatching { (if (path.startsWith("http")) ImageIO.read(java.net.URL(path)) else ImageIO.read(File(path)))?.toComposeImageBitmap() }.getOrNull() }
     }
     image?.let { Image(it, contentDescription = null, modifier = modifier, contentScale = ContentScale.Crop) }
 }

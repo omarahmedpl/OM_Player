@@ -35,6 +35,7 @@ class AndroidPlatformActions(
     private val launchImagePicker: (onResult: (String?) -> Unit) -> Unit,
 ) : PlatformActions {
     override fun pickImage(onResult: (String?) -> Unit) = launchImagePicker(onResult)
+    override fun saveCoverImage(bytes: ByteArray): String? = CoverStore.save(activity.filesDir, bytes)
 
     override fun pickTextFile(onResult: (String?) -> Unit) = launchTextPicker(onResult)
 

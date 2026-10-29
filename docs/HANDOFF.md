@@ -480,3 +480,11 @@ Research and critique behind the audio work: [AUDIO_RESEARCH.md](AUDIO_RESEARCH.
 - **Streaming:** draft plan from Codex in [STREAMING_PLAN.md](STREAMING_PLAN.md). Nothing built.
 - **Verified (emulator, API 34):** the three new tabs and shuffle, edit title/artist, pasted synced lyrics and the lyrics view, lookup error handling. 7 unit tests pass (`desktopTest`).
 - **Not verified:** picking a cover image (system picker not driven), a successful online lyrics lookup (server returned 503), the Windows MSI, and desktop UI for these features.
+
+### 2026-10-29 (evening): Find cover online, Discover (Audius), two Android editions
+
+- **Find cover online** (Edit song): MusicBrainz identifies the release, the Cover Art Archive supplies the front cover (`MusicBrainzCovers`, `PlatformActions.saveCoverImage`). Verified on the emulator ("Clair de Lune" / Debussy found a cover).
+- **Discover** tab (Music): trending and search from Audius (`AudiusSource`, `OnlineMusicSource`, `ui/library/OnlineMusic.kt`). Only tracks Audius marks streamable and not gated are listed; the app shows "Powered by Audius". Streamed items keep their stream address in `MediaItem.uri` and artwork address in `coverPath`; the player hides favourite, add-to-playlist and edit for them. Verified: a trending track played with artwork on the emulator.
+- **Two Android editions** (product flavors, `edition` dimension): `lite` = `com.omplayer`, no Discover; `plus` = `com.omplayer.plus`, label "OM Player+", Discover on (`BuildConfig.DISCOVER`). Both are signed with the release key, installable side by side. Build: `assembleLiteRelease` / `assemblePlusRelease`; files in `dist/` are `om-player-1.0.0.apk` (lite) and `om-player-plus-1.0.0.apk`. Desktop Discover is off unless `OMPLAYER_DISCOVER=1` is set. Keep the plus APK out of public releases.
+- **Decision:** no YouTube/yt-dlp style extraction (against YouTube's terms and works around its protections). Nuclear was studied only for ideas (see STREAMING_PLAN.md).
+- `versionCode` is 6. `assembleDebug` now builds both editions; use `assembleLiteDebug` for one.

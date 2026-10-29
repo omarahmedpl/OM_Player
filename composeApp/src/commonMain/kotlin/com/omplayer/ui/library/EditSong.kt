@@ -37,7 +37,9 @@ import com.omplayer.ui.components.OmButton
 import com.omplayer.ui.components.OmText
 import com.omplayer.ui.components.OmTextField
 import com.omplayer.ui.components.ThumbnailPlaceholder
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Edit how a song is shown in OM Player: title, artist, cover, and lyrics (typed, pasted, or found online).
@@ -56,6 +58,7 @@ internal fun EditSongDialog(item: MediaItem, onDone: (String) -> Unit, onDismiss
     var lyrics by remember { mutableStateOf(savedLyrics[item.id].orEmpty()) }
     var status by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var coverBusy by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -72,6 +75,20 @@ internal fun EditSongDialog(item: MediaItem, onDone: (String) -> Unit, onDismiss
                         if (cover.isNotBlank()) OmButton("Remove cover", { cover = "" }, primary = false)
                     }
                 }
+                OmButton(
+                    if (coverBusy) "Searching…" else "Find cover online",
+                    {
+                        scope.launch {
+                            coverBusy = true; status = null
+                            val bytes = deps.covers.find(title, artist, item.album)
+                            val saved = bytes?.let { withContext(Dispatchers.IO) { deps.platform.saveCoverImage(it) } }
+                            if (saved != null) { cover = saved; status = "Cover found" }
+                            else status = if (bytes == null) "No cover found online. You can choose an image instead." else "Couldn't use that image."
+                            coverBusy = false
+                        }
+                    },
+                    Modifier.fillMaxWidth(), primary = false, icon = Icons.Rounded.Search, enabled = !coverBusy && title.isNotBlank(),
+                )
                 Spacer(Modifier.height(OmSpace.s1))
                 OmTextField(
                     lyrics, { lyrics = it }, Modifier.fillMaxWidth(), label = "Lyrics",
@@ -94,7 +111,7 @@ internal fun EditSongDialog(item: MediaItem, onDone: (String) -> Unit, onDismiss
                     Modifier.fillMaxWidth(), primary = false, icon = Icons.Rounded.Search, enabled = !busy && title.isNotBlank(),
                 )
                 status?.let { OmText(it, color = c.text2, size = 13.sp, maxLines = 3) }
-                OmText("Changes apply inside OM Player. The audio file itself isn't changed.", color = c.text3, size = 12.sp, maxLines = 2)
+                OmText("Changes apply inside OM Player. The audio file itself isn't changed. Covers come from MusicBrainz and the Cover Art Archive, lyrics from LRCLIB.", color = c.text3, size = 12.sp, maxLines = 2)
             }
         },
         confirmButton = {

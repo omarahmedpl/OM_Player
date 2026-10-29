@@ -52,21 +52,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun saveCover(uri: Uri): String? = try {
-        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
-        var sample = 1
-        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 640) sample *= 2
-        val bmp = contentResolver.openInputStream(uri)?.use {
-            android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
-        }
-        bmp?.let { b ->
-            val scale = 640f / maxOf(b.width, b.height)
-            val out = if (scale < 1f) android.graphics.Bitmap.createScaledBitmap(b, (b.width * scale).toInt(), (b.height * scale).toInt(), true) else b
-            val dir = java.io.File(filesDir, "covers").apply { mkdirs() }
-            val file = java.io.File(dir, "cover_${System.currentTimeMillis()}.jpg")
-            file.outputStream().use { out.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, it) }
-            file.absolutePath
-        }
+        contentResolver.openInputStream(uri)?.use { it.readBytes() }?.takeIf { it.size <= 25_000_000 }?.let { CoverStore.save(filesDir, it) }
     } catch (_: Exception) { null }
 
     private val textPickLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -172,7 +158,8 @@ class MainActivity : ComponentActivity() {
                 if (Build.VERSION.SDK_INT >= 33) notificationLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
             },
         )
-        val deps = AppDeps(repository, PersistentProgressStore(this), engine, actions, com.omplayer.data.UserLibrary(com.omplayer.data.PrefsTextStorage(this)), com.omplayer.data.LrcLibLyrics())
+        val deps = AppDeps(repository, PersistentProgressStore(this), engine, actions, com.omplayer.data.UserLibrary(com.omplayer.data.PrefsTextStorage(this)), com.omplayer.data.LrcLibLyrics(), com.omplayer.data.MusicBrainzCovers(),
+            if (BuildConfig.DISCOVER) com.omplayer.data.AudiusSource() else com.omplayer.data.NoOnlineMusic)
         mark("deps")
 
         // Keep PiP params current; on API 31+ the system enters PiP itself when playing.

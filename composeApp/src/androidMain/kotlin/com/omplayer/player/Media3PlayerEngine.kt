@@ -251,7 +251,8 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
                     if (item.artist.isNotBlank()) setArtist(item.artist)
                     if (item.album.isNotBlank()) setAlbumTitle(item.album)
                     // A cover the user picked shows in the notification and on the lock screen.
-                    if (item.coverPath.isNotBlank()) runCatching { File(item.coverPath).readBytes() }.getOrNull()
+                    if (item.coverPath.startsWith("http")) setArtworkUri(Uri.parse(item.coverPath))
+                    else if (item.coverPath.isNotBlank()) runCatching { File(item.coverPath).readBytes() }.getOrNull()
                         ?.let { setArtworkData(it, androidx.media3.common.MediaMetadata.PICTURE_TYPE_FRONT_COVER) }
                 }.build(),
         )

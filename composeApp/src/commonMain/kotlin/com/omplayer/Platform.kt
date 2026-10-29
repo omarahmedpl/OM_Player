@@ -45,6 +45,8 @@ interface PlatformActions {
     fun pickTextFile(onResult: (text: String?) -> Unit) { onResult(null) }
     /** Let the user pick an image; the platform copies it (scaled down) into app storage and returns that file's path, or null. */
     fun pickImage(onResult: (path: String?) -> Unit) { onResult(null) }
+    /** Scale image [bytes] down and keep them in app storage as a cover; returns the file path, or null. Call off the main thread. */
+    fun saveCoverImage(bytes: ByteArray): String? = null
     /** Share playlists (names and song titles) as a JSON file or a PNG image. Returns false when the platform can't. */
     fun sharePlaylists(lists: List<SharedPlaylist>, format: ShareFormat): Boolean = false
     /** Called when audio playback starts so the platform can start its background service / ask for notifications. */
@@ -69,6 +71,10 @@ class AppDeps(
     val userData: com.omplayer.data.UserLibrary = com.omplayer.data.UserLibrary(),
     /** Finds song lyrics online. */
     val lyrics: com.omplayer.data.LyricsProvider = com.omplayer.data.NoLyrics,
+    /** Looks up cover art online. */
+    val covers: com.omplayer.data.CoverProvider = com.omplayer.data.NoCovers,
+    /** A catalogue of freely streamable music (Discover). */
+    val online: com.omplayer.data.OnlineMusicSource = com.omplayer.data.NoOnlineMusic,
 )
 
 val LocalAppDeps = staticCompositionLocalOf<AppDeps> { error("AppDeps not provided") }

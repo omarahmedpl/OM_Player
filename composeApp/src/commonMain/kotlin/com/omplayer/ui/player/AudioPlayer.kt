@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.sp
 import com.omplayer.LocalAppDeps
 import com.omplayer.PlatformBackHandler
 import com.omplayer.data.LibraryState
+import com.omplayer.data.isStreamed
 import com.omplayer.model.MediaItem
 import com.omplayer.player.PlayerState
 import com.omplayer.player.RepeatMode
@@ -144,7 +145,7 @@ private fun AudioNowPlayingContent(onCollapse: () -> Unit) {
                         textAlign = TextAlign.Center, modifier = Modifier.weight(1f),
                     )
                     OmIconButton(Icons.Rounded.Lyrics, if (showLyrics) "Hide lyrics" else "Show lyrics", { showLyrics = !showLyrics }, tint = if (showLyrics) c.primaryHover else c.text)
-                    OmIconButton(Icons.Rounded.Edit, "Edit song", { showEdit = true }, tint = c.text)
+                    if (!item.isStreamed) OmIconButton(Icons.Rounded.Edit, "Edit song", { showEdit = true }, tint = c.text)
                     OmIconButton(Icons.Rounded.QueueMusic, "Queue", { panel = AudioPanel.Queue }, tint = c.text)
                 }
                 if (wide) {
@@ -227,7 +228,8 @@ private fun Controls(
                     overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = OmSpace.s1),
                 )
             }
-            PIconButton(
+            // Favourites and playlists hold songs from this device, so streamed tracks don't get them.
+            if (!item.isStreamed) PIconButton(
                 if (fav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                 if (fav) "Remove from favourites" else "Add to favourites",
                 { lib.toggleFavorite(item.id) }, tint = if (fav) c.primaryHover else c.onVideo,
@@ -270,7 +272,7 @@ private fun Controls(
             )
             PTextButton(speedLabel(st.speed), "Playback speed", { openPanel(AudioPanel.Speed) }, active = st.speed != 1f)
             val sleeping = st.sleepEndsAtMs > 0 || st.sleepAtTrackEnd
-            PIconButton(Icons.Rounded.PlaylistAdd, "Add to playlist", { openPanel(AudioPanel.Playlists) })
+            if (!item.isStreamed) PIconButton(Icons.Rounded.PlaylistAdd, "Add to playlist", { openPanel(AudioPanel.Playlists) })
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PIconButton(Icons.Rounded.Bedtime, "Sleep timer", { openPanel(AudioPanel.Sleep) }, active = sleeping)
                 if (sleeping) Text(

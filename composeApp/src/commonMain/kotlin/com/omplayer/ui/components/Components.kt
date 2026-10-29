@@ -368,7 +368,7 @@ fun ThumbnailPlaceholder(
             tint = c.onVideo.copy(alpha = 0.55f), modifier = Modifier.size(28.dp),
         )
         if (isAudio && coverPath.isNotBlank()) com.omplayer.LocalImage(coverPath, Modifier.matchParentSize())
-        else if (uri != null) {
+        else if (uri != null && !uri.startsWith("http")) {
             if (isAudio) AudioArtwork(uri, Modifier.matchParentSize())
             else VideoThumbnail(uri, Modifier.matchParentSize())
         }

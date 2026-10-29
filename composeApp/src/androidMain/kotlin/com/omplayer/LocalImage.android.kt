@@ -21,7 +21,11 @@ private val localImages = object : LruCache<String, ImageBitmap>(16 * 1024 * 102
 actual fun LocalImage(path: String, modifier: Modifier) {
     val image by produceState(synchronized(localImages) { localImages.get(path) }, path) {
         if (value == null) value = withContext(Dispatchers.IO) {
-            runCatching { BitmapFactory.decodeFile(path)?.asImageBitmap() }.getOrNull()
+            runCatching {
+                // Streamed tracks carry an artwork address instead of a file.
+                if (path.startsWith("http")) java.net.URL(path).openStream().use { BitmapFactory.decodeStream(it) }?.asImageBitmap()
+                else BitmapFactory.decodeFile(path)?.asImageBitmap()
+            }.getOrNull()
                 ?.also { synchronized(localImages) { localImages.put(path, it) } }
         }
     }
