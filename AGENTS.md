@@ -13,7 +13,7 @@ You are continuing **OM Player**, an original, ad-free video player for Android 
 
 ## Rules
 - **Read `docs/HANDOFF.md` section 0 first.** Two Android editions exist (lite and plus); build both and keep the plus APK private.
-- **Legal sources only.** Never add yt-dlp/youtube-dl style extraction, scraping, or DRM circumvention, and never rip audio from Spotify, YouTube, Anghami or similar. Use official APIs and open licences, honour download flags and attribution rules, and keep keys out of the repo.
+- **Online sources:** on 2026-10-29 the owner approved replacing the Android Plus yt-dlp integration with an Android bridge using the Go engine behind `lvcoi/ytdl-go`, including a separate search implementation. Preserve the `ytdlp` storage key for saved-track/download compatibility. Lite and desktop do not enable this source. Keep Plus APKs private. Do not add DRM circumvention; keep credentials out of the repo and honour applicable source terms, licences and attribution.
 - **Clean room:** never decompile, copy or reference MX Player code, assets, names or branding. Public-feature parity only.
 - **Contracts are stable** (see HANDOFF §4): `App(deps, openRequests)`, `LibraryRoot(...)`, `PlayerScreen(...)`, `PlayerEngine`, `expect VideoSurface(...)`, `PlatformActions`. Change them only with a matching update in HANDOFF.md.
 - **Design:** colours only from `OmTheme.colors`; spacing `OmSpace`, radius `OmRadius`, motion `OmMotion` (ease-out, ≤300 ms, sheets ≤380 ms, press scale 0.97, never animate keyboard-triggered actions). The player stays dark (`OmScheme(DarkColors)`). 44 dp touch targets on phone. Content descriptions on icon buttons. The UX reference is `prototype/mobile.html` and `prototype/desktop.html`.

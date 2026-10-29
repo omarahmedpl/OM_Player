@@ -1,4 +1,6 @@
-# Streaming integration plan (draft)
+# Streaming integration plan (historical draft)
+
+**Current implementation (2026-10-29):** Android Plus now uses the existing `YtDlpSource` for search, per-track stream resolution and downloads. The owner explicitly approved retaining it. This document preserves the earlier official-API research; its proposed implementation order does not describe the current app. See [HANDOFF.md section 0](HANDOFF.md#0-current-state-read-this-first-last-updated-2026-10-29) for current architecture and verification status. Lite and desktop do not enable this source, and Plus APKs remain private.
 
 Drafted by Codex on 2026-10-29 (read-only planning pass), condensed here. It cites the services' official docs as of that date, but terms change, so re-check each link before building. Nothing here is implemented.
 

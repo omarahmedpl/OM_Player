@@ -1,83 +1,123 @@
 # OM Player
 
-An ad-free video and music player for **Android** and **PC** (Linux, Windows). No account, no ads, no online feed, and only the permissions a player needs.
+OM Player is an ad-free, local-first video and music player for Android and desktop (Linux and Windows). Lite plays media stored on your device. The private Android Plus edition adds optional online music discovery, streaming and downloads.
 
 <p>
-  <img src="packaging/flathub/screenshots/library.png" alt="Library" width="48%">
-  <img src="packaging/flathub/screenshots/player.png" alt="Player" width="48%">
+  <img src="packaging/flathub/screenshots/library.png" alt="OM Player media library" width="48%">
+  <img src="packaging/flathub/screenshots/player.png" alt="OM Player video player" width="48%">
 </p>
 
 ## Download
 
-Get the latest build from the [Releases page](https://github.com/omarahmedpl/OM_Player/releases/latest).
+Get public builds from the [GitHub Releases page](https://github.com/omarahmedpl/OM_Player/releases). Each release lists its files and SHA-256 checksums. The published files can vary by release.
 
-| Platform | File | Notes |
-|---|---|---|
-| Android 8.0+ | `om-player-1.0.0.apk` | Allow installs from your browser or file manager when asked. |
-| Linux (Debian, Ubuntu) | `om-player_1.0.0_amd64.deb` | `sudo apt install ./om-player_1.0.0_amd64.deb` (pulls in VLC's libvlc). |
-| Windows 10/11 | `om-player-1.0.0.msi` | Built by the [Windows MSI workflow](.github/workflows/windows-msi.yml). Needs [VLC 3.x](https://www.videolan.org/vlc/) (64-bit) installed. |
+| Platform | Package | Install notes |
+| --- | --- | --- |
+| Android 8.0+ | Lite APK for your device ABI (`arm64-v8a`, `armeabi-v7a`, `x86` or `x86_64`) | These are standalone ABI-specific APKs, not one universal APK. Most current phones use `arm64-v8a`. |
+| Debian or Ubuntu, x86-64 | `om-player_<version>_amd64.deb` | Install with `sudo apt install ./om-player_<version>_amd64.deb`. The package depends on VLC's `libvlc`. |
+| Linux, x86-64 | `om-player-<version>-linux-x86_64.tar.gz` | Portable desktop package; requires libVLC 3.x. |
+| Windows 10/11, x86-64 | `.msi` installer | Requires 64-bit VLC 3.x. The Windows MSI workflow builds it. |
 
-Each release lists SHA-256 checksums. Verify a file with `sha256sum <file>` (Linux) or `Get-FileHash <file>` (Windows).
+Each release may include only some of these packages; check its asset list before downloading. The Plus APK is private and is not included in public releases. Desktop currently has no online music source.
+
+To verify a downloaded file, run `sha256sum <file>` on Linux or `Get-FileHash <file>` in PowerShell and compare it with that release's `SHA256SUMS` file.
 
 ## Features
 
-**Video**
-- Gestures on phones: swipe the left half for brightness, the right half for volume, swipe sideways to seek with a preview, double-tap to skip, long-press for 2x, pinch to zoom.
-- Keyboard and mouse on PC: Space, J/L, arrows, `[` `]` for speed, F for full screen, M to mute, `?` for the full list. Drag and drop files onto the window.
-- Subtitles: track picker, add a file, size and background, and a sync offset that keeps working when you seek.
-- Audio tracks, speed 0.25x to 4x, volume boost to 200%, sleep timer, A-B repeat, aspect modes, screen lock, picture-in-picture on Android.
-- Resumes where you stopped.
+### Video
 
-**Music (Android)**
-- Audio-first player with large cover art, seek bar, skip back 10 s / forward 30 s, shuffle, repeat, speed, sleep timer, favourites and a queue.
-- Mini-player above the bottom navigation. Drag the cover down to minimize.
-- Keeps playing in the background with notification, lock-screen and Bluetooth button controls.
-- Playlists: create, play, shuffle, select several, share as an image or a JSON file with the song names, and import from that JSON.
-- Browse by Songs, Artists, Albums, Folders, Favourites and Playlists, with a shuffle button on each artist, album and folder.
-- Edit a song's title, artist and cover inside the app, and add lyrics by pasting them or finding them online (synced lyrics follow the song).
+- Phone gestures: swipe the left half for brightness, the right half for volume, swipe sideways to seek with a preview, double-tap to skip, long-press for 2× speed, and pinch to zoom.
+- Keyboard and mouse controls on PC, plus drag and drop. Press `?` in the desktop app for the shortcut list.
+- Subtitle track selection, external subtitle files, size and background controls, and a sync offset that persists when seeking.
+- Audio-track selection, 0.25×–4× speed, volume boost up to 200%, sleep timer, A–B repeat, aspect modes, and Android picture-in-picture.
+- Remembers playback position.
 
-**Library**
-- Folders, videos and music, with search, sort, grid or list.
-- Long-press to select, then share, delete or add to a playlist.
-- Remembers your scroll position when you come back from a folder.
+### Music on Android
+
+- Audio-first player with cover art, a seek bar, skip back 10 seconds / forward 30 seconds, shuffle, repeat, speed, sleep timer, favourites and a queue.
+- Mini-player and background playback with notification, lock-screen and Bluetooth controls.
+- Playlists: create, play, shuffle, select multiple tracks, share as an image or JSON, and import JSON.
+- Browse Songs, Artists, Albums, Folders, Favourites and Playlists.
+- Edit a song's title, artist and cover. Add lyrics by pasting them or looking them up online; synced lyrics follow playback.
+
+### Library
+
+- Browse folders, videos and music with search, sorting, grid and list views.
+- Long-press to select items, then share, delete or add them to a playlist.
+- Remembers your library scroll position when you return from a folder.
+
+## Android editions
+
+| Edition | Includes | Distribution |
+| --- | --- | --- |
+| **Lite** | Local media playback and library | Public, ABI-specific APKs |
+| **Plus** | Lite features plus Discover search, streaming and downloads through the Android Go bridge based on [`lvcoi/ytdl-go`](https://github.com/lvcoi/ytdl-go) | Private APK; not attached to public releases |
+
+Plus resolves an online track when playback starts and stores completed downloads in app-private storage. The separate search implementation returns public search results. Download only content you have permission to keep. Python and yt-dlp are not bundled. Desktop has no online source.
 
 ## Build from source
 
-You need JDK 21. The Android build also needs the Android SDK (API 36); put its path in `local.properties` as `sdk.dir=...`.
+### Requirements
+
+- JDK 21.
+- Android SDK with API 36 for Android builds; set `sdk.dir` in an untracked `local.properties` file.
+- Go 1.24.13 and Android NDK 28.2.13676358 for Plus builds. Set `GO_BINARY` or pass `-PgoBinary=/path/to/go` if Go is not on `PATH`.
+- VLC 3.x installed to run the desktop app or use the Windows MSI.
+
+Lite and desktop builds do not need Go or the Android NDK.
+
+### Common commands
 
 ```bash
-./gradlew :composeApp:run                  # desktop app (needs VLC 3.x installed)
-./gradlew :composeApp:assembleLiteDebug    # Android APK, composeApp/build/outputs/apk/lite/debug/
-./gradlew :composeApp:desktopTest          # unit tests
-packaging/linux/build-deb.sh               # Linux .deb into dist/
-./gradlew :composeApp:packageMsi           # Windows MSI (run on Windows with WiX 3 installed)
+# Run the desktop app (Linux requires VLC 3.x)
+./gradlew :composeApp:run
+
+# Build Android development APKs
+./gradlew :composeApp:assembleLiteDebug :composeApp:assemblePlusDebug
+
+# Build signed Android release APKs for the supported ABIs
+./gradlew :composeApp:assembleLiteRelease :composeApp:assemblePlusRelease
+
+# Run shared desktop unit tests
+./gradlew :composeApp:desktopTest
+
+# Build a Debian package into dist/
+packaging/linux/build-deb.sh
+
+# Build a Windows MSI (run on Windows with WiX Toolset 3.x)
+./gradlew :composeApp:packageMsi
 ```
 
-Release signing for Android reads `omplayer.release.*` from `local.properties` (not tracked). Without it, `assembleRelease` builds an unsigned APK.
+Release signing reads `omplayer.release.*` from `local.properties`, which is not tracked. Without signing properties, Android release tasks produce unsigned APKs. Keep signing credentials and private Plus packages out of public source control and releases.
 
 ### Windows MSI on GitHub
 
-The [Windows MSI workflow](.github/workflows/windows-msi.yml) builds the installer on a Windows runner:
+The [Windows MSI workflow](.github/workflows/windows-msi.yml) supports two modes:
 
-- **By hand:** Actions → *Windows MSI* → *Run workflow*. Download the MSI from the run's artifacts.
-- **On a release:** push a tag such as `v1.0.0`. The MSI and its checksum are attached to that tag's GitHub release.
+- **Manual run:** Actions → **Windows MSI** → **Run workflow**. Download the MSI and checksum from the run's artifacts.
+- **Release build:** push a tag such as `v1.0.0`. The workflow builds the MSI and attaches it with its checksum to that GitHub release.
 
-## How it is built
+## Project structure
 
-Kotlin and Compose Multiplatform, with one shared UI.
+- `composeApp/src/commonMain`: shared UI, media-player contracts, library, playlists and online-source interfaces.
+- `composeApp/src/androidMain`: Android Media3 playback, media session service, platform integrations and widgets.
+- `composeApp/src/desktopMain`: desktop UI and vlcj/libVLC playback.
+- `composeApp/src/jvmShared`: JVM code shared by Android and desktop.
+- `packaging/`: Linux packaging and Flathub metadata.
 
-- **Android:** Media3 ExoPlayer, with a foreground media service for background audio.
-- **Desktop:** vlcj / libVLC for playback, so it plays nearly any format.
-- Shared code lives in `composeApp/src/commonMain`; platform code in `androidMain` and `desktopMain`.
+The app uses Kotlin and Compose Multiplatform. Android playback uses Media3 ExoPlayer; desktop playback uses [vlcj](https://github.com/caprica/vlcj) and the system's libVLC installation.
 
-More detail: [docs/HANDOFF.md](docs/HANDOFF.md) (decisions, contracts, status), [docs/DESIGN.md](docs/DESIGN.md), [docs/MX_FEATURE_STUDY.md](docs/MX_FEATURE_STUDY.md) and [docs/AUDIO_RESEARCH.md](docs/AUDIO_RESEARCH.md).
+## Contributing
 
-## Flathub
+Bug reports are most useful with the device or OS, steps to reproduce, expected result and actual result. For code changes, keep pull requests focused and include the relevant test or build command and its result.
 
-Flatpak packaging is in [packaging/flathub](packaging/flathub) (see its README for the submission steps).
+## More documentation
+
+- [Project handoff](docs/HANDOFF.md): modules, architecture, build details and current verification status.
+- [Design principles](docs/DESIGN.md) and [feature study](docs/MX_FEATURE_STUDY.md).
+- [Audio research](docs/AUDIO_RESEARCH.md).
+- [Flathub packaging](packaging/flathub): metadata, screenshots and submission notes.
 
 ## License and credits
 
-[GPL-3.0-or-later](LICENSE). The desktop app uses [vlcj](https://github.com/caprica/vlcj), which is GPL-3.0, and libVLC from the VideoLAN project.
-
-OM Player is an original project. It is inspired by the features people expect from a full-featured player, and it does not use any code, assets or branding from other players.
+OM Player is licensed under [GPL-3.0-or-later](LICENSE). The desktop app uses vlcj (GPL-3.0) and libVLC from the VideoLAN project. OM Player is an original project; it does not use other players' code, artwork or branding.
