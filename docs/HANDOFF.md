@@ -48,7 +48,7 @@ Video player and library (earlier sessions); audio-first player with queue, shuf
 
 ### Not done / unverified
 
-- GitHub publication is pending. The owner has now authorized a fast-forward push. The existing v1.0.0 release currently has only the Linux desktop archive; the Windows MSI workflow is local and has not run. Public assets must include Lite/Linux/Windows only; keep Plus private.
+- GitHub publication is complete. Source updates are on `main` at `9128106`. The existing `v1.0.0` release contains all four Lite ABI APKs, the rebuilt Linux `.deb`, the Windows MSI, and platform checksum files; its Linux x86_64 portable archive is retained. Windows MSI workflow run `40922422232` succeeded from `main`. Plus APKs remain private and are excluded from the public release.
 - Picking a cover image through the system picker; JSON playlist share chooser; embedded artwork on real files; playback surviving a destroyed Activity (an earlier check was inconclusive); Android below API 34; desktop UI for the new music features; desktop performance; Windows/macOS fullscreen.
 - Notification text/artwork for the current song updates only on the next track change after an edit.
 - Streamed tracks are not restored by the local last-session restore. The newer online favourites/history/playlists and downloads need current runtime verification.
@@ -64,7 +64,7 @@ Video player and library (earlier sessions); audio-first player with queue, shuf
 ### What to do next
 
 1. Signed Lite/Plus ABI APKs and the Linux `.deb` are built; Plus ARM64 is installed on phone `R5CX90H99EP`. The latest Lite release build and `.deb` archive structure were verified locally. The local-video read-path fix was confirmed working by the owner after update.
-2. Push the current source fast-forward, run the Windows MSI workflow, and attach Lite ABI APKs, Linux `.deb`, MSI and checksums to the existing release. Never upload Plus APKs.
+2. Release publication is complete. For the next public build, keep Plus packages private and verify each artifact against its published checksum.
 
 ### Environment notes (added)
 
