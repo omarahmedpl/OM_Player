@@ -32,7 +32,10 @@ class AndroidPlatformActions(
     private val launchSender: (IntentSender, (Boolean) -> Unit) -> Unit,
     private val requestNotifications: () -> Unit,
     private val launchTextPicker: (onResult: (String?) -> Unit) -> Unit,
+    private val launchImagePicker: (onResult: (String?) -> Unit) -> Unit,
 ) : PlatformActions {
+    override fun pickImage(onResult: (String?) -> Unit) = launchImagePicker(onResult)
+
     override fun pickTextFile(onResult: (String?) -> Unit) = launchTextPicker(onResult)
 
     private var askedNotifications = false

@@ -80,6 +80,8 @@ interface PlayerEngine {
     }
     fun setRepeatMode(mode: RepeatMode) {}
     fun setShuffle(enabled: Boolean) {}
+    /** The shown metadata of a queued item changed (title, artist, cover). Engines refresh what they display. */
+    fun updateItem(item: MediaItem) {}
     fun skipNext() {}
     fun skipPrevious() {}
     fun skipTo(index: Int) {}

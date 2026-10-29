@@ -43,6 +43,8 @@ interface PlatformActions {
     fun deleteMedia(uris: List<String>, onResult: (deleted: Int) -> Unit) { onResult(0) }
     /** Let the user pick a small text file (an exported playlist). [onResult] gets its text, or null if cancelled or unreadable. */
     fun pickTextFile(onResult: (text: String?) -> Unit) { onResult(null) }
+    /** Let the user pick an image; the platform copies it (scaled down) into app storage and returns that file's path, or null. */
+    fun pickImage(onResult: (path: String?) -> Unit) { onResult(null) }
     /** Share playlists (names and song titles) as a JSON file or a PNG image. Returns false when the platform can't. */
     fun sharePlaylists(lists: List<SharedPlaylist>, format: ShareFormat): Boolean = false
     /** Called when audio playback starts so the platform can start its background service / ask for notifications. */
@@ -65,6 +67,8 @@ class AppDeps(
     val platform: PlatformActions,
     /** Favourites and playlists. */
     val userData: com.omplayer.data.UserLibrary = com.omplayer.data.UserLibrary(),
+    /** Finds song lyrics online. */
+    val lyrics: com.omplayer.data.LyricsProvider = com.omplayer.data.NoLyrics,
 )
 
 val LocalAppDeps = staticCompositionLocalOf<AppDeps> { error("AppDeps not provided") }
@@ -77,6 +81,10 @@ expect fun VideoSurface(engine: PlayerEngine, scaleMode: ScaleMode, zoom: Float,
 /** Draws a bounded video preview when the platform can retrieve one; otherwise the caller's placeholder remains visible. */
 @Composable
 expect fun VideoThumbnail(uri: String, modifier: Modifier = Modifier)
+
+/** Draws an image file from app storage (a cover the user picked); draws nothing if it can't be read. */
+@Composable
+expect fun LocalImage(path: String, modifier: Modifier = Modifier)
 
 /** Draws embedded album artwork when available; the library keeps its music-note fallback otherwise. */
 @Composable

@@ -247,7 +247,13 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
         .setMediaId(item.id)
         .setMediaMetadata(
             androidx.media3.common.MediaMetadata.Builder().setTitle(item.title)
-                .apply { if (item.artist.isNotBlank()) setArtist(item.artist) }.build(),
+                .apply {
+                    if (item.artist.isNotBlank()) setArtist(item.artist)
+                    if (item.album.isNotBlank()) setAlbumTitle(item.album)
+                    // A cover the user picked shows in the notification and on the lock screen.
+                    if (item.coverPath.isNotBlank()) runCatching { File(item.coverPath).readBytes() }.getOrNull()
+                        ?.let { setArtworkData(it, androidx.media3.common.MediaMetadata.PICTURE_TYPE_FRONT_COVER) }
+                }.build(),
         )
         .setSubtitleConfigurations(if (item.id == current?.id) extraSubs.toList() else emptyList())
         .build()
@@ -295,6 +301,12 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
         player.shuffleModeEnabled = enabled
         if (current?.isAudio != false) prefs.edit().putBoolean("audio_shuffle", enabled).apply()
         sync()
+    }
+
+    override fun updateItem(item: MediaItem) {
+        queueItems = queueItems.map { if (it.id == item.id) item else it }
+        if (current?.id == item.id) current = item
+        if (playerLazy.isInitialized()) sync()
     }
 
     override fun skipNext() { player.seekToNext(); sync() }

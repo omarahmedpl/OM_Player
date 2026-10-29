@@ -36,6 +36,9 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
         }
+        // Plain-JVM code used by both targets (network lookups).
+        androidMain { kotlin.srcDir("src/jvmShared/kotlin") }
+        desktopMain.kotlin.srcDir("src/jvmShared/kotlin")
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
             implementation(libs.kotlinx.coroutines.android)
@@ -59,7 +62,7 @@ android {
         applicationId = "com.omplayer"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
+        versionCode = 5
         versionName = "1.0.0"
     }
     compileOptions {
@@ -104,6 +107,14 @@ compose.desktop {
             vendor = "OM Player"
             // vlcj loads libVLC via JNA; ship the full runtime so no JVM module is missing at run time.
             includeAllModules = true
+            windows {
+                iconFile.set(project.file("icons/om-player.ico"))
+                menuGroup = "OM Player"
+                shortcut = true
+                dirChooser = true
+                // Fixed id so a newer MSI upgrades an installed OM Player instead of installing next to it.
+                upgradeUuid = "290412f0-595a-4f12-8f54-3ae55f2522b1"
+            }
             linux {
                 iconFile.set(project.file("icons/om-player.png"))
                 debMaintainer = "0omarahmed73@gmail.com"

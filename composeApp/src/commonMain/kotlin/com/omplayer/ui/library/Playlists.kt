@@ -1,6 +1,8 @@
 package com.omplayer.ui.library
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -111,13 +113,14 @@ internal fun PlaylistPickerDialog(items: List<MediaItem>, onDone: (String) -> Un
 
 /** Music destination: Songs, Favourites and Playlists. */
 @Composable
-internal fun MusicHome(all: List<MediaItem>, prefs: ListPrefs, actions: ItemActions) {
+internal fun MusicHome(all: List<MediaItem>, folders: List<com.omplayer.model.MediaFolder>, prefs: ListPrefs, actions: ItemActions) {
     val deps = LocalAppDeps.current
     val lib = deps.userData
     val favorites by lib.favorites.collectAsState()
     val playlists by lib.playlists.collectAsState()
     var tab by remember { mutableStateOf(0) }
     var openId by remember { mutableStateOf<String?>(null) }
+    var openGroup by remember { mutableStateOf<String?>(null) }
     var selected by remember { mutableStateOf(emptySet<String>()) }
     var shareTarget by remember { mutableStateOf<List<Playlist>?>(null) }
     var deleteTarget by remember { mutableStateOf<List<Playlist>?>(null) }
@@ -125,23 +128,46 @@ internal fun MusicHome(all: List<MediaItem>, prefs: ListPrefs, actions: ItemActi
     val audio = remember(all) { all.filter { it.isAudio } }
     val byId = remember(audio) { audio.associateBy { it.id } }
 
-    PlatformBackHandler(enabled = openId != null) { openId = null }
+    PlatformBackHandler(enabled = openId != null || openGroup != null) { if (openGroup != null) openGroup = null else openId = null }
+    val shufflePlay = rememberShufflePlay(actions)
 
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.padding(horizontal = contentPad()).padding(top = OmSpace.s1), horizontalArrangement = Arrangement.spacedBy(OmSpace.s2)) {
-            listOf("Songs", "Favourites", "Playlists").forEachIndexed { i, label ->
-                OmChip(label, tab == i, { tab = i; openId = null; selected = emptySet() })
+        Row(
+            Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = contentPad()).padding(top = OmSpace.s1),
+            horizontalArrangement = Arrangement.spacedBy(OmSpace.s2),
+        ) {
+            listOf("Songs", "Artists", "Albums", "Folders", "Favourites", "Playlists").forEachIndexed { i, label ->
+                OmChip(label, tab == i, { tab = i; openId = null; openGroup = null; selected = emptySet() })
             }
         }
         Spacer(Modifier.size(OmSpace.s1))
         Column(Modifier.weight(1f)) {
             CompositionLocalProvider(LocalScrollKey provides "music/$tab") {
                 when (tab) {
-                    0 -> MusicContent(all, prefs, actions)
-                    1 -> {
+                    0 -> Column(Modifier.fillMaxSize()) {
+                        if (audio.isNotEmpty()) Row(Modifier.padding(horizontal = contentPad()), verticalAlignment = Alignment.CenterVertically) {
+                            OmText("${audio.size} ${if (audio.size == 1) "song" else "songs"}", color = OmTheme.colors.text3, size = 12.sp, tnum = true, modifier = Modifier.weight(1f))
+                            OmIconButton(Icons.Rounded.Shuffle, "Shuffle all songs", { shufflePlay(audio) }, tint = OmTheme.colors.primary)
+                        }
+                        MusicContent(all, prefs, actions)
+                    }
+                    1, 2, 3 -> {
+                        val kind = GroupKind.entries[tab - 1]
+                        val groups = remember(kind, audio, folders) { groupsOf(kind, audio, folders) }
+                        val open = groups.firstOrNull { it.key == openGroup }
+                        if (open == null) GroupList(kind, groups, actions) { openGroup = it.key }
+                        else GroupDetail(kind, open, prefs, actions)
+                    }
+                    4 -> {
                         val favs = audio.filter { it.id in favorites }
                         if (favs.isEmpty()) EmptyState(Icons.Rounded.Favorite, "No favourites yet", "Tap the heart in the player to keep a track here.")
-                        else ItemList(favs, prefs, actions, Modifier.fillMaxSize())
+                        else Column(Modifier.fillMaxSize()) {
+                            Row(Modifier.padding(horizontal = contentPad()), verticalAlignment = Alignment.CenterVertically) {
+                                OmText("${favs.size} ${if (favs.size == 1) "song" else "songs"}", color = OmTheme.colors.text3, size = 12.sp, tnum = true, modifier = Modifier.weight(1f))
+                                OmIconButton(Icons.Rounded.Shuffle, "Shuffle favourites", { shufflePlay(favs) }, tint = OmTheme.colors.primary)
+                            }
+                            ItemList(favs, prefs, actions, Modifier.fillMaxSize())
+                        }
                     }
                     else -> {
                         val open = playlists.firstOrNull { it.id == openId }
@@ -299,7 +325,7 @@ private fun PlaylistDetail(playlist: Playlist, byId: Map<String, MediaItem>, act
     val rowActions = remember(actions, playlist.id) {
         ItemActions(
             actions.play, actions.info, actions.notice, actions.selected, actions.selectable, actions.toggle,
-            onRemove = { lib.removeFromPlaylist(playlist.id, it.id) },
+            onRemove = { lib.removeFromPlaylist(playlist.id, it.id) }, addToPlaylist = actions.addToPlaylist, onEdit = actions.onEdit,
         )
     }
     Column(Modifier.fillMaxSize()) {

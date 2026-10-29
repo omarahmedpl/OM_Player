@@ -31,7 +31,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Forward30
 import androidx.compose.material.icons.rounded.PlaylistAdd
@@ -68,6 +70,7 @@ import com.omplayer.data.LibraryState
 import com.omplayer.model.MediaItem
 import com.omplayer.player.PlayerState
 import com.omplayer.player.RepeatMode
+import com.omplayer.ui.library.EditSongDialog
 import com.omplayer.ui.library.PlaylistPicker
 import com.omplayer.theme.DarkColors
 import com.omplayer.theme.OmMotion
@@ -103,6 +106,8 @@ private fun AudioNowPlayingContent(onCollapse: () -> Unit) {
     val item = st.item ?: return
     var panel by remember { mutableStateOf<AudioPanel?>(null) }
     var sleepMinutes by remember { mutableStateOf<Int?>(null) }
+    var showLyrics by remember { mutableStateOf(false) }
+    var showEdit by remember { mutableStateOf(false) }
 
     PlatformBackHandler { if (panel != null) panel = null else onCollapse() }
 
@@ -135,26 +140,32 @@ private fun AudioNowPlayingContent(onCollapse: () -> Unit) {
                 Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).then(dragToMinimize), verticalAlignment = Alignment.CenterVertically) {
                     OmIconButton(Icons.Rounded.KeyboardArrowDown, "Minimize player", onCollapse, tint = c.text)
                     Text(
-                        "NOW PLAYING", color = c.text3, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                        "NOW PLAYING", color = c.text3, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
                         textAlign = TextAlign.Center, modifier = Modifier.weight(1f),
                     )
+                    OmIconButton(Icons.Rounded.Lyrics, if (showLyrics) "Hide lyrics" else "Show lyrics", { showLyrics = !showLyrics }, tint = if (showLyrics) c.primaryHover else c.text)
+                    OmIconButton(Icons.Rounded.Edit, "Edit song", { showEdit = true }, tint = c.text)
                     OmIconButton(Icons.Rounded.QueueMusic, "Queue", { panel = AudioPanel.Queue }, tint = c.text)
                 }
                 if (wide) {
                     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(OmSpace.s6), verticalAlignment = Alignment.CenterVertically) {
-                        Artwork(item, artScale, Modifier.fillMaxHeight(0.85f).aspectRatio(1f).then(dragToMinimize))
+                        if (showLyrics) LyricsView(item, st.positionMs, { engine.seekTo(it) }, { showEdit = true }, Modifier.fillMaxHeight(0.85f).aspectRatio(1f))
+                        else Artwork(item, artScale, Modifier.fillMaxHeight(0.85f).aspectRatio(1f).then(dragToMinimize))
                         Controls(st, item, hasNext, sleepMinutes, { panel = it }, Modifier.weight(1f))
                     }
                 } else {
                     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(Modifier.weight(1f).fillMaxWidth().then(dragToMinimize), contentAlignment = Alignment.Center) {
-                            Artwork(item, artScale, Modifier.widthIn(max = 420.dp).fillMaxWidth().aspectRatio(1f))
+                        Box(Modifier.weight(1f).fillMaxWidth().then(if (showLyrics) Modifier else dragToMinimize), contentAlignment = Alignment.Center) {
+                            if (showLyrics) LyricsView(item, st.positionMs, { engine.seekTo(it) }, { showEdit = true })
+                            else Artwork(item, artScale, Modifier.widthIn(max = 420.dp).fillMaxWidth().aspectRatio(1f))
                         }
                         Controls(st, item, hasNext, sleepMinutes, { panel = it }, Modifier.padding(bottom = OmSpace.s6))
                     }
                 }
             }
         }
+
+        if (showEdit) EditSongDialog(item, onDone = { showEdit = false }, onDismiss = { showEdit = false })
 
         when (panel) {
             AudioPanel.Speed -> PanelHost(false, "Speed", { panel = null }) { SpeedPanel(st.speed) { engine.setSpeed(it) } }
@@ -184,7 +195,7 @@ private fun AudioNowPlayingContent(onCollapse: () -> Unit) {
 @Composable
 private fun Artwork(item: MediaItem, scale: Float, modifier: Modifier) {
     Box(modifier.graphicsLayer { scaleX = scale; scaleY = scale }.clip(RoundedCornerShape(OmRadius.xl))) {
-        ThumbnailPlaceholder(item.id, Modifier.fillMaxSize(), isAudio = true, uri = item.uri)
+        ThumbnailPlaceholder(item.id, Modifier.fillMaxSize(), isAudio = true, uri = item.uri, coverPath = item.coverPath)
     }
 }
 
@@ -323,7 +334,7 @@ fun MiniPlayer(onExpand: () -> Unit, modifier: Modifier = Modifier) {
                 .padding(start = OmSpace.s3, end = OmSpace.s1, top = OmSpace.s1, bottom = OmSpace.s1),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ThumbnailPlaceholder(item.id, Modifier.size(44.dp).clip(RoundedCornerShape(OmRadius.sm)), isAudio = true, uri = item.uri)
+            ThumbnailPlaceholder(item.id, Modifier.size(44.dp).clip(RoundedCornerShape(OmRadius.sm)), isAudio = true, uri = item.uri, coverPath = item.coverPath)
             Column(Modifier.weight(1f).padding(horizontal = OmSpace.s3)) {
                 OmText(item.title, weight = FontWeight.SemiBold, size = 14.sp)
                 OmText(item.artist.ifBlank { "Audio" }, color = c.text3, size = 12.sp)

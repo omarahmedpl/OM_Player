@@ -99,6 +99,7 @@ fun main(args: Array<String>) {
                 engine = engine,
                 platform = platform,
                 userData = com.omplayer.data.UserLibrary(com.omplayer.data.FileTextStorage()),
+                lyrics = com.omplayer.data.LrcLibLyrics(),
             )
         }
         val openRequests = remember { openChannel.receiveAsFlow() }

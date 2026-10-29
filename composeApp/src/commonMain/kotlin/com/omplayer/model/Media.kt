@@ -14,6 +14,9 @@ data class MediaItem(
     val isAudio: Boolean = false,
     /** Audio only: artist tag when the platform provides one. */
     val artist: String = "",
+    val album: String = "",
+    /** App-side cover image file chosen by the user (overrides embedded artwork); empty when none. */
+    val coverPath: String = "",
 ) {
     /** "4K", "1080p", "720p"… or empty when unknown. */
     val resolutionLabel: String

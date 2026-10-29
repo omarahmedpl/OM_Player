@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.RemoveCircleOutline
 import androidx.compose.foundation.layout.Arrangement
@@ -82,6 +83,7 @@ internal class ItemActions(
     /** Set inside a playlist: adds "Remove from playlist" to the item menu. */
     val onRemove: ((MediaItem) -> Unit)? = null,
     val addToPlaylist: ((List<MediaItem>) -> Unit)? = null,
+    val onEdit: ((MediaItem) -> Unit)? = null,
 ) {
     val selecting get() = selected.isNotEmpty()
 }
@@ -220,7 +222,7 @@ internal fun MediaCell(item: MediaItem, queue: List<MediaItem>, grid: Boolean, a
     val onHold: (() -> Unit)? = if (actions.selectable) ({ actions.toggle(item) }) else null
 
     @Composable
-    fun thumb(m: Modifier) = ThumbnailPlaceholder(item.id, m.clip(RoundedCornerShape(OmRadius.sm)), item.isAudio, uri = item.uri) {
+    fun thumb(m: Modifier) = ThumbnailPlaceholder(item.id, m.clip(RoundedCornerShape(OmRadius.sm)), item.isAudio, uri = item.uri, coverPath = item.coverPath) {
         if (item.durationMs > 0) MetaChip(formatDuration(item.durationMs), Modifier.align(Alignment.BottomEnd).padding(4.dp))
         if (frac > 0f) ProgressBar(frac, Modifier.align(Alignment.BottomStart))
         if (isSel) Box(Modifier.matchParentSize().background(c.primary.copy(alpha = 0.28f)))
@@ -279,6 +281,11 @@ internal fun ItemMenu(item: MediaItem, queue: List<MediaItem>, actions: ItemActi
                 text = { OmText("Add to playlist") },
                 leadingIcon = { Icon(Icons.Rounded.PlaylistAdd, null, tint = c.text2) },
                 onClick = { open = false; actions.addToPlaylist.invoke(listOf(item)) },
+            )
+            if (item.isAudio && actions.onEdit != null) DropdownMenuItem(
+                text = { OmText("Edit song") },
+                leadingIcon = { Icon(Icons.Rounded.Edit, null, tint = c.text2) },
+                onClick = { open = false; actions.onEdit.invoke(item) },
             )
             if (actions.onRemove != null) DropdownMenuItem(
                 text = { OmText("Remove from playlist") },

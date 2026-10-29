@@ -6,6 +6,11 @@ import kotlinx.coroutines.flow.StateFlow
 /** What an import did: playlists created, tracks found on this device, tracks listed in the file. */
 data class ImportResult(val playlists: Int, val matched: Int, val total: Int)
 
+/** What the user changed about a song inside the app. Blank fields keep the file's own value. */
+data class SongEdit(val title: String = "", val artist: String = "", val coverPath: String = "") {
+    val isEmpty get() = title.isBlank() && artist.isBlank() && coverPath.isBlank()
+}
+
 data class Playlist(val id: String, val name: String, val itemIds: List<String>)
 
 /** Where [UserLibrary] keeps its text. One small file or preference per platform. */
@@ -31,7 +36,23 @@ class UserLibrary(private val storage: TextStorage = MemoryTextStorage()) {
     private val _playlists = MutableStateFlow<List<Playlist>>(emptyList())
     val playlists: StateFlow<List<Playlist>> = _playlists
 
+    private val _edits = MutableStateFlow<Map<String, SongEdit>>(emptyMap())
+    val edits: StateFlow<Map<String, SongEdit>> = _edits
+    private val _lyrics = MutableStateFlow<Map<String, String>>(emptyMap())
+    val lyrics: StateFlow<Map<String, String>> = _lyrics
+
     init { load() }
+
+    fun setEdit(id: String, edit: SongEdit) {
+        _edits.value = if (edit.isEmpty) _edits.value - id else _edits.value + (id to edit)
+        save()
+    }
+
+    /** Blank text removes the lyrics. */
+    fun setLyrics(id: String, text: String) {
+        _lyrics.value = if (text.isBlank()) _lyrics.value - id else _lyrics.value + (id to text)
+        save()
+    }
 
     fun toggleFavorite(id: String) {
         _favorites.value = if (id in _favorites.value) _favorites.value - id else _favorites.value + id
@@ -84,7 +105,9 @@ class UserLibrary(private val storage: TextStorage = MemoryTextStorage()) {
 
     private fun save() {
         val lines = _favorites.value.map { "F\t${esc(it)}" } +
-            _playlists.value.map { "P\t${it.id}\t${esc(it.name)}\t${it.itemIds.joinToString(",") { id -> esc(id) }}" }
+            _playlists.value.map { "P\t${it.id}\t${esc(it.name)}\t${it.itemIds.joinToString(",") { id -> esc(id) }}" } +
+            _edits.value.map { (id, e) -> "E\t${esc(id)}\t${esc(e.title)}\t${esc(e.artist)}\t${esc(e.coverPath)}" } +
+            _lyrics.value.map { (id, t) -> "L\t${esc(id)}\t${esc(t)}" }
         runCatching { storage.write(lines.joinToString("\n")) }
     }
 
@@ -92,15 +115,27 @@ class UserLibrary(private val storage: TextStorage = MemoryTextStorage()) {
         val text = runCatching { storage.read() }.getOrNull() ?: return
         val fav = LinkedHashSet<String>()
         val lists = ArrayList<Playlist>()
+        val edits = LinkedHashMap<String, SongEdit>()
+        val lyrics = LinkedHashMap<String, String>()
         text.lineSequence().forEach { line ->
             val p = line.split('\t')
             when {
                 p.size >= 2 && p[0] == "F" -> fav += unesc(p[1])
+                p.size >= 5 && p[0] == "E" -> edits[unesc(p[1])] = SongEdit(unesc(p[2]), unesc(p[3]), unesc(p[4]))
+                p.size >= 3 && p[0] == "L" -> lyrics[unesc(p[1])] = unesc(p[2])
                 p.size >= 3 && p[0] == "P" ->
                     lists += Playlist(p[1], unesc(p[2]), p.getOrNull(3).orEmpty().split(',').filter { it.isNotEmpty() }.map(::unesc))
             }
         }
         _favorites.value = fav
         _playlists.value = lists
+        _edits.value = edits
+        _lyrics.value = lyrics
     }
 }
+
+/** The item as the user edited it. */
+fun com.omplayer.model.MediaItem.withEdit(e: SongEdit?): com.omplayer.model.MediaItem =
+    if (e == null) this else copy(
+        title = e.title.ifBlank { title }, artist = e.artist.ifBlank { artist }, coverPath = e.coverPath.ifBlank { coverPath },
+    )

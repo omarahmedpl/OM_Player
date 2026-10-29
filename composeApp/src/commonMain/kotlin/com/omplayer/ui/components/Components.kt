@@ -354,6 +354,7 @@ fun ThumbnailPlaceholder(
     modifier: Modifier = Modifier,
     isAudio: Boolean = false,
     uri: String? = null,
+    coverPath: String = "",
     content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
 ) {
     val c = OmTheme.colors
@@ -366,7 +367,8 @@ fun ThumbnailPlaceholder(
             if (isAudio) Icons.Rounded.MusicNote else Icons.Rounded.PlayArrow, null,
             tint = c.onVideo.copy(alpha = 0.55f), modifier = Modifier.size(28.dp),
         )
-        if (uri != null) {
+        if (isAudio && coverPath.isNotBlank()) com.omplayer.LocalImage(coverPath, Modifier.matchParentSize())
+        else if (uri != null) {
             if (isAudio) AudioArtwork(uri, Modifier.matchParentSize())
             else VideoThumbnail(uri, Modifier.matchParentSize())
         }
@@ -390,6 +392,8 @@ fun OmTextField(
     imeAction: ImeAction = ImeAction.Done,
     keyboardType: KeyboardType = KeyboardType.Text,
     onSubmit: () -> Unit = {},
+    /** A taller, wrapping field for longer text such as lyrics. */
+    multiline: Boolean = false,
 ) {
     val c = OmTheme.colors
     val shape = RoundedCornerShape(OmRadius.md)
@@ -399,7 +403,7 @@ fun OmTextField(
             Spacer(Modifier.height(OmSpace.s1 + 2.dp))
         }
         Row(
-            Modifier.fillMaxWidth().heightIn(min = OmSpace.tap + 4.dp).clip(shape).background(c.surface2)
+            Modifier.fillMaxWidth().heightIn(min = if (multiline) 140.dp else OmSpace.tap + 4.dp).clip(shape).background(c.surface2)
                 .border(1.dp, if (error != null) c.danger else c.hairlineStrong, shape)
                 .padding(horizontal = OmSpace.s3),
             verticalAlignment = Alignment.CenterVertically,
@@ -408,10 +412,10 @@ fun OmTextField(
                 Icon(leading, null, tint = c.text3, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(OmSpace.s2))
             }
-            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            Box(Modifier.weight(1f).then(if (multiline) Modifier.padding(vertical = OmSpace.s3) else Modifier), contentAlignment = if (multiline) Alignment.TopStart else Alignment.CenterStart) {
                 if (value.isEmpty()) OmText(placeholder, color = c.text3, size = 15.sp)
                 BasicTextField(
-                    value = value, onValueChange = onValueChange, singleLine = true,
+                    value = value, onValueChange = onValueChange, singleLine = !multiline, maxLines = if (multiline) 12 else 1,
                     textStyle = TextStyle(color = c.text, fontSize = 15.sp),
                     cursorBrush = SolidColor(c.primary),
                     keyboardOptions = KeyboardOptions(imeAction = imeAction, keyboardType = keyboardType),

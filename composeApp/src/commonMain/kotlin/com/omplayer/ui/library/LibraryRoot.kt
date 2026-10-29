@@ -74,6 +74,7 @@ import com.omplayer.FormFactor
 import com.omplayer.LocalAppDeps
 import com.omplayer.PlatformBackHandler
 import com.omplayer.data.LibraryState
+import com.omplayer.data.withEdit
 import com.omplayer.model.MediaFolder
 import com.omplayer.model.MediaItem
 import com.omplayer.theme.OmRadius
@@ -127,13 +128,20 @@ fun LibraryRoot(
     var notice by remember { mutableStateOf<String?>(null) }
     var info by remember { mutableStateOf<MediaItem?>(null) }
 
-    val folders = remember(state) { (state as? LibraryState.Ready)?.folders.orEmpty() }
+    val edits by deps.userData.edits.collectAsState()
+    // Titles, artists and covers the user edited are applied here, so every list, queue and player shows them.
+    val folders = remember(state, edits) {
+        (state as? LibraryState.Ready)?.folders.orEmpty().let { fs ->
+            if (edits.isEmpty()) fs else fs.map { f -> f.copy(items = f.items.map { it.withEdit(edits[it.id]) }) }
+        }
+    }
     val allItems = remember(folders) { folders.flatMap { it.items } }
     val searching = query.isNotBlank()
 
     var selectedIds by remember { mutableStateOf(emptySet<String>()) }
     var confirmDelete by remember { mutableStateOf(false) }
     var playlistTarget by remember { mutableStateOf<List<MediaItem>?>(null) }
+    var editTarget by remember { mutableStateOf<MediaItem?>(null) }
     val selecting = selectedIds.isNotEmpty()
     val scrollStore = remember { ScrollStore() }
     val actions = remember(onPlay, selectedIds, desktop) {
@@ -142,6 +150,7 @@ fun LibraryRoot(
             selected = selectedIds, selectable = !desktop,
             toggle = { m -> selectedIds = if (m.id in selectedIds) selectedIds - m.id else selectedIds + m.id },
             addToPlaylist = { playlistTarget = it },
+            onEdit = { editTarget = it },
         )
     }
     val selectedItems = remember(selectedIds, allItems) { allItems.filter { it.id in selectedIds } }
@@ -270,6 +279,9 @@ fun LibraryRoot(
                 }
             }
         }
+        editTarget?.let { t ->
+            EditSongDialog(t, onDone = { msg -> editTarget = null; notice = msg }, onDismiss = { editTarget = null })
+        }
         playlistTarget?.let { target ->
             PlaylistPickerDialog(target, onDone = { msg -> playlistTarget = null; selectedIds = emptySet(); notice = msg }, onDismiss = { playlistTarget = null })
         }
@@ -327,7 +339,7 @@ private fun Body(
                 Dest.Videos -> if (LocalAppDeps.current.platform.formFactor == FormFactor.Phone)
                     HomeContent(folders, prefs, showContinue = true, actions, onOpenFolder, refresh)
                 else ItemList(allItems.filter { !it.isAudio }, prefs, actions, Modifier.fillMaxSize())
-                Dest.Music -> MusicHome(allItems, prefs, actions)
+                Dest.Music -> MusicHome(allItems, folders, prefs, actions)
                 is Dest.Folder -> folders.firstOrNull { it.id == dest.id }?.let { FolderContent(it, prefs, actions) }
                 else -> {}
             }

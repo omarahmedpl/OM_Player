@@ -1,0 +1,54 @@
+name: Windows MSI
+
+# Builds the Windows installer (.msi) on a Windows runner.
+#  - Run it by hand: Actions > Windows MSI > Run workflow. The MSI is an artifact of the run.
+#  - Push a tag like v1.0.0: the MSI is also attached to the GitHub release for that tag.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  msi:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # The Gradle project also configures the Android target, which needs an SDK present (not used for the MSI).
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # jpackage needs the WiX Toolset 3.x, which GitHub's Windows runners include.
+      - name: Build MSI
+        shell: bash
+        run: ./gradlew :composeApp:packageMsi --no-daemon --console=plain
+
+      - name: Collect and checksum
+        shell: bash
+        run: |
+          mkdir dist
+          cp composeApp/build/compose/binaries/main/msi/*.msi dist/
+          cd dist
+          sha256sum *.msi | tee SHA256SUMS-windows.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: om-player-windows-msi
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Attach to the GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
