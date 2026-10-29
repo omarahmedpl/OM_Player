@@ -261,7 +261,7 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
 
     override fun open(item: MediaItem, startMs: Long) = openQueue(listOf(item), 0, startMs)
 
-    override fun openQueue(items: List<MediaItem>, startIndex: Int, startMs: Long) {
+    override fun openQueue(items: List<MediaItem>, startIndex: Int, startMs: Long, autoPlay: Boolean) {
         val first = items.getOrNull(startIndex) ?: return
         openedAtMs = SystemClock.elapsedRealtime()
         queueItems = items
@@ -280,14 +280,14 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
             player.playbackParameters = PlaybackParameters(prefs.getFloat("audio_speed", 1f))
             player.repeatMode = prefs.getInt("audio_repeat", Player.REPEAT_MODE_OFF)
             player.shuffleModeEnabled = prefs.getBoolean("audio_shuffle", false)
-            connectService()
+            if (autoPlay) connectService()
         } else {
             player.repeatMode = Player.REPEAT_MODE_OFF
             player.shuffleModeEnabled = false
         }
         player.setMediaItems(items.map(::build), startIndex, startMs.coerceAtLeast(0))
         player.prepare()
-        player.playWhenReady = true
+        player.playWhenReady = autoPlay
         sync()
     }
 
@@ -344,6 +344,8 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
     }
 
     override fun play() {
+        // A session restored paused has no background service yet; it starts here.
+        if (current?.isAudio == true) connectService()
         if (player.playbackState == Player.STATE_ENDED) player.seekTo(0)
         if (player.playbackState == Player.STATE_IDLE && current != null) player.prepare()
         player.play()

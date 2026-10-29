@@ -75,6 +75,8 @@ class AppDeps(
     val covers: com.omplayer.data.CoverProvider = com.omplayer.data.NoCovers,
     /** A catalogue of freely streamable music (Discover). */
     val online: com.omplayer.data.OnlineMusicSource = com.omplayer.data.NoOnlineMusic,
+    /** The last audio session, offered again (paused) when the app starts. */
+    val session: com.omplayer.data.SessionStore = com.omplayer.data.SessionStore(),
 )
 
 val LocalAppDeps = staticCompositionLocalOf<AppDeps> { error("AppDeps not provided") }

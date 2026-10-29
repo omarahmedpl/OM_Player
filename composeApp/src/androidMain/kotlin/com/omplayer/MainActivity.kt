@@ -159,7 +159,8 @@ class MainActivity : ComponentActivity() {
             },
         )
         val deps = AppDeps(repository, PersistentProgressStore(this), engine, actions, com.omplayer.data.UserLibrary(com.omplayer.data.PrefsTextStorage(this)), com.omplayer.data.LrcLibLyrics(), com.omplayer.data.MusicBrainzCovers(),
-            if (BuildConfig.DISCOVER) com.omplayer.data.AudiusSource() else com.omplayer.data.NoOnlineMusic)
+            if (BuildConfig.DISCOVER) com.omplayer.data.AudiusSource() else com.omplayer.data.NoOnlineMusic,
+            com.omplayer.data.SessionStore(com.omplayer.data.PrefsTextStorage(this, "om_session")))
         mark("deps")
 
         // Keep PiP params current; on API 31+ the system enters PiP itself when playing.

@@ -22,12 +22,16 @@ import androidx.compose.ui.Modifier
 import com.omplayer.model.MediaItem
 import com.omplayer.theme.OmTheme
 import com.omplayer.ui.library.LibraryRoot
+import com.omplayer.data.LibraryState
+import com.omplayer.data.SavedSession
+import com.omplayer.data.withEdit
 import com.omplayer.ui.player.AudioNowPlaying
 import com.omplayer.ui.player.PlayerScreen
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.runtime.collectAsState
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 
 /** What's on screen. The player is an overlay above the library so the library keeps its scroll state. */
 data class NowPlaying(val item: MediaItem, val queue: List<MediaItem>)
@@ -61,7 +65,10 @@ fun App(deps: AppDeps, openRequests: Flow<MediaItem> = emptyFlow()) {
         openRequests.collect { play(it, listOf(it)) }
     }
     LaunchedEffect(audioActive) { if (!audioActive) audioExpanded = false }
-    if (phone) AudioProgressSaver(deps)
+    if (phone) {
+        AudioProgressSaver(deps)
+        RestoreLastSession(deps, settings.resumePlayback) { nowPlaying != null }
+    }
 
     CompositionLocalProvider(LocalAppDeps provides deps) {
         OmTheme(settings.theme) {
@@ -116,17 +123,53 @@ private fun AudioProgressSaver(deps: AppDeps) {
         var dur = 0L
         var playing = false
         var lastSave = 0L
+        var lastSessionSave = 0L
         deps.engine.state.collect { s ->
             val item = s.item?.takeIf { it.isAudio }
-            if (item == null) { id = null; playing = false; return@collect }
+            if (item == null) {
+                // Closing the player (audio -> nothing) forgets the session; a video starting does not.
+                if (id != null && s.item == null) deps.session.clear()
+                id = null; playing = false; return@collect
+            }
             val previous = id
             if (previous != null && previous != item.id) deps.progress.save(previous, pos, dur)
             if (playing && !s.isPlaying) deps.progress.save(item.id, s.positionMs, s.durationMs)
+            val changedTrack = previous != item.id
+            val paused = playing && !s.isPlaying
             id = item.id; pos = s.positionMs; dur = s.durationMs; playing = s.isPlaying
             if (s.isPlaying && s.positionMs - lastSave !in -5_000L..5_000L) {
                 lastSave = s.positionMs
                 deps.progress.save(item.id, s.positionMs, s.durationMs)
             }
+            // The last session (queue, track, position) is kept so the app can offer it again after a restart.
+            // Streamed tracks aren't kept: they aren't in the device library.
+            if (s.queue.isNotEmpty() && s.queueIndex >= 0 && s.queue.none { it.uri.startsWith("http") } &&
+                (changedTrack || paused || s.positionMs - lastSessionSave !in -5_000L..5_000L)
+            ) {
+                lastSessionSave = s.positionMs
+                deps.session.save(SavedSession(s.queue.map { it.id }, s.queueIndex, s.positionMs))
+            }
         }
+    }
+}
+
+/**
+ * Brings back the last audio session after a restart: the same queue and track, at the same spot, paused, so the mini-player
+ * is there waiting for Play. Skipped if something is already loaded or the user already opened something.
+ */
+@Composable
+private fun RestoreLastSession(deps: AppDeps, enabled: Boolean, busy: () -> Boolean) {
+    LaunchedEffect(deps) {
+        if (!enabled) return@LaunchedEffect
+        val saved = deps.session.load() ?: return@LaunchedEffect
+        val ready = deps.repository.state.first { it is LibraryState.Ready } as LibraryState.Ready
+        if (deps.engine.state.value.item != null || busy()) return@LaunchedEffect
+        val edits = deps.userData.edits.value
+        val byId = ready.folders.flatMap { it.items }.filter { it.isAudio }.associateBy { it.id }
+        val items = saved.ids.mapNotNull { id -> byId[id]?.withEdit(edits[id]) }
+        val current = saved.ids[saved.index]
+        val index = items.indexOfFirst { it.id == current }
+        if (index < 0) return@LaunchedEffect // the song is gone from the device
+        deps.engine.openQueue(items, index, saved.positionMs, autoPlay = false)
     }
 }

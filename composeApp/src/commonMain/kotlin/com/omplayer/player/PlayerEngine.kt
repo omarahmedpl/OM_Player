@@ -74,8 +74,11 @@ interface PlayerEngine {
     fun setSubtitleStyle(scale: Float, background: Boolean) {}
     /** Load an external subtitle file (path or URI) for the current item. */
     fun addSubtitle(uri: String) {}
-    /** Play [items] starting at [startIndex]. The engine advances through them (also in the background). */
-    fun openQueue(items: List<MediaItem>, startIndex: Int, startMs: Long = 0) {
+    /**
+     * Play [items] starting at [startIndex]. The engine advances through them (also in the background).
+     * With [autoPlay] false the item is loaded and left paused, waiting for the user.
+     */
+    fun openQueue(items: List<MediaItem>, startIndex: Int, startMs: Long = 0, autoPlay: Boolean = true) {
         items.getOrNull(startIndex)?.let { open(it, startMs) }
     }
     fun setRepeatMode(mode: RepeatMode) {}
