@@ -98,6 +98,7 @@ fun main(args: Array<String>) {
                 progress = JsonFileProgressStore(),
                 engine = engine,
                 platform = platform,
+                userData = com.omplayer.data.UserLibrary(com.omplayer.data.FileTextStorage()),
             )
         }
         val openRequests = remember { openChannel.receiveAsFlow() }

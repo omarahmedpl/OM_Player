@@ -1,6 +1,12 @@
 package com.omplayer.player
 
+import android.app.PendingIntent
+import android.content.ComponentName
 import android.content.Context
+import androidx.media3.common.AudioAttributes
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import com.google.common.util.concurrent.ListenableFuture
 import android.content.pm.ApplicationInfo
 import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
@@ -21,6 +27,11 @@ import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.ForwardingRenderer
+import androidx.media3.exoplayer.Renderer
+import androidx.media3.exoplayer.text.TextOutput
+import androidx.media3.exoplayer.text.TextRenderer
+import android.os.Looper
 import androidx.media3.session.MediaSession
 import com.omplayer.model.MediaItem
 import kotlinx.coroutines.CoroutineScope
@@ -40,6 +51,16 @@ import java.util.Locale
 @OptIn(UnstableApi::class)
 class Media3PlayerEngine(context: Context) : PlayerEngine {
     private val appContext = context.applicationContext
+
+    companion object {
+        @Volatile private var instance: Media3PlayerEngine? = null
+
+        /** One engine per process: it outlives the Activity so background audio keeps playing. */
+        fun get(context: Context): Media3PlayerEngine =
+            instance ?: synchronized(this) { instance ?: Media3PlayerEngine(context).also { instance = it } }
+
+        fun existing(): Media3PlayerEngine? = instance
+    }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     /**
@@ -54,6 +75,16 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
     override val state: StateFlow<PlayerState> = _state
 
     private var current: MediaItem? = null
+    private var queueItems: List<MediaItem> = emptyList()
+    private val prefs = appContext.getSharedPreferences("om_player_prefs", Context.MODE_PRIVATE)
+    private var sleepEndsAt = 0L
+    private var sleepAtEnd = false
+    private var sleepJob: Job? = null
+    private var delayJob: Job? = null
+    private var controllerFuture: ListenableFuture<MediaController>? = null
+
+    /** The session the background service publishes (lock screen, notification, Bluetooth buttons). */
+    val mediaSession: MediaSession? get() { player; return session }
     private val extraSubs = mutableListOf<XItem.SubtitleConfiguration>()
     private var error: String? = null
     private var volume = 1f
@@ -72,6 +103,13 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
             sync()
         }
 
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM && sleepAtEnd) {
+                sleepAtEnd = false
+                player.pauseAtEndOfMediaItems = false
+            }
+        }
+
         override fun onPlayerError(e: PlaybackException) {
             error = friendly(e)
             sync()
@@ -81,10 +119,11 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
     private fun buildPlayer(): ExoPlayer {
         val player = ExoPlayer.Builder(
             appContext,
-            DefaultRenderersFactory(appContext)
+            DelayedRenderers(appContext)
                 .setEnableDecoderFallback(true)
                 .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER),
-        ).build()
+        ).setHandleAudioBecomingNoisy(true)
+            .build()
         player.addListener(listener)
         if (appContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
             player.addAnalyticsListener(object : AnalyticsListener {
@@ -101,7 +140,11 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
                 }
             })
         }
-        session = MediaSession.Builder(appContext, player).setId("om_player").build()
+        val builder = MediaSession.Builder(appContext, player).setId("om_player")
+        appContext.packageManager.getLaunchIntentForPackage(appContext.packageName)?.let {
+            builder.setSessionActivity(PendingIntent.getActivity(appContext, 0, it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
+        }
+        session = builder.build()
         return player
     }
 
@@ -125,6 +168,7 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
 
     private fun sync() {
         if (released) return
+        current = queueItems.getOrNull(player.currentMediaItemIndex) ?: current
         val tracks = player.currentTracks
         val audio = mutableListOf<Track>()
         val subs = mutableListOf<Track>()
@@ -168,6 +212,13 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
             videoWidth = vw,
             videoHeight = vs.height,
             error = error,
+            repeat = when (player.repeatMode) { Player.REPEAT_MODE_ALL -> RepeatMode.All; Player.REPEAT_MODE_ONE -> RepeatMode.One; else -> RepeatMode.Off },
+            shuffle = player.shuffleModeEnabled,
+            hasNext = player.hasNextMediaItem(),
+            queue = queueItems,
+            queueIndex = if (queueItems.isEmpty()) -1 else player.currentMediaItemIndex,
+            sleepEndsAtMs = sleepEndsAt,
+            sleepAtTrackEnd = sleepAtEnd,
         )
     }
 
@@ -194,21 +245,89 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
     private fun build(item: MediaItem): XItem = XItem.Builder()
         .setUri(toUri(item.uri))
         .setMediaId(item.id)
-        .setMediaMetadata(androidx.media3.common.MediaMetadata.Builder().setTitle(item.title).build())
-        .setSubtitleConfigurations(extraSubs.toList())
+        .setMediaMetadata(
+            androidx.media3.common.MediaMetadata.Builder().setTitle(item.title)
+                .apply { if (item.artist.isNotBlank()) setArtist(item.artist) }.build(),
+        )
+        .setSubtitleConfigurations(if (item.id == current?.id) extraSubs.toList() else emptyList())
         .build()
 
-    override fun open(item: MediaItem, startMs: Long) {
+    override fun open(item: MediaItem, startMs: Long) = openQueue(listOf(item), 0, startMs)
+
+    override fun openQueue(items: List<MediaItem>, startIndex: Int, startMs: Long) {
+        val first = items.getOrNull(startIndex) ?: return
         openedAtMs = SystemClock.elapsedRealtime()
-        current = item
+        queueItems = items
+        current = first
         extraSubs.clear()
         error = null
+        setSleepTimer(null)
+        player.setAudioAttributes(
+            AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
+                .setContentType(if (first.isAudio) C.AUDIO_CONTENT_TYPE_MUSIC else C.AUDIO_CONTENT_TYPE_MOVIE).build(),
+            true,
+        )
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .clearOverrides().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
-        player.setMediaItem(build(item), startMs.coerceAtLeast(0))
+        if (first.isAudio) {
+            player.playbackParameters = PlaybackParameters(prefs.getFloat("audio_speed", 1f))
+            player.repeatMode = prefs.getInt("audio_repeat", Player.REPEAT_MODE_OFF)
+            player.shuffleModeEnabled = prefs.getBoolean("audio_shuffle", false)
+            connectService()
+        } else {
+            player.repeatMode = Player.REPEAT_MODE_OFF
+            player.shuffleModeEnabled = false
+        }
+        player.setMediaItems(items.map(::build), startIndex, startMs.coerceAtLeast(0))
         player.prepare()
         player.playWhenReady = true
         sync()
+    }
+
+    override fun setRepeatMode(mode: RepeatMode) {
+        val m = when (mode) { RepeatMode.All -> Player.REPEAT_MODE_ALL; RepeatMode.One -> Player.REPEAT_MODE_ONE; RepeatMode.Off -> Player.REPEAT_MODE_OFF }
+        player.repeatMode = m
+        if (current?.isAudio != false) prefs.edit().putInt("audio_repeat", m).apply()
+        sync()
+    }
+
+    override fun setShuffle(enabled: Boolean) {
+        player.shuffleModeEnabled = enabled
+        if (current?.isAudio != false) prefs.edit().putBoolean("audio_shuffle", enabled).apply()
+        sync()
+    }
+
+    override fun skipNext() { player.seekToNext(); sync() }
+    override fun skipPrevious() { player.seekToPrevious(); sync() }
+    override fun skipTo(index: Int) {
+        if (index in queueItems.indices) { player.seekToDefaultPosition(index); player.play(); sync() }
+    }
+
+    override fun setSleepTimer(minutes: Int?, atTrackEnd: Boolean) {
+        sleepJob?.cancel(); sleepJob = null
+        sleepEndsAt = 0L; sleepAtEnd = false
+        if (playerLazy.isInitialized()) player.pauseAtEndOfMediaItems = false
+        if (atTrackEnd) {
+            sleepAtEnd = true
+            player.pauseAtEndOfMediaItems = true
+        } else if (minutes != null && minutes > 0) {
+            sleepEndsAt = System.currentTimeMillis() + minutes * 60_000L
+            sleepJob = scope.launch {
+                delay(minutes * 60_000L)
+                player.pause()
+                sleepEndsAt = 0L
+                sync()
+            }
+        }
+        if (playerLazy.isInitialized()) sync()
+    }
+
+    /** Binding a controller starts [PlaybackService], which owns the notification and foreground state. */
+    private fun connectService() {
+        if (controllerFuture != null) return
+        controllerFuture = MediaController.Builder(
+            appContext, SessionToken(appContext, ComponentName(appContext, PlaybackService::class.java)),
+        ).buildAsync()
     }
 
     override fun play() {
@@ -219,7 +338,11 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
 
     override fun pause() = player.pause()
     override fun seekTo(positionMs: Long) { player.seekTo(positionMs.coerceAtLeast(0)); sync() }
-    override fun setSpeed(speed: Float) { player.playbackParameters = PlaybackParameters(speed.coerceIn(0.25f, 4f)) }
+    override fun setSpeed(speed: Float) {
+        val v = speed.coerceIn(0.25f, 4f)
+        player.playbackParameters = PlaybackParameters(v)
+        if (current?.isAudio == true) prefs.edit().putFloat("audio_speed", v).apply()
+    }
 
     override fun setVolume(volume: Float) {
         this.volume = volume.coerceIn(0f, 2f)
@@ -263,10 +386,34 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
     override fun selectAudioTrack(id: String) = select(C.TRACK_TYPE_AUDIO, id)
     override fun selectSubtitleTrack(id: String?) = select(C.TRACK_TYPE_TEXT, id)
 
-    /** TODO: the value is stored (and survives seeks/track changes) but not yet applied to cue timing.
-     *  Needs a custom SubtitleParser.Factory/CuesResolver that shifts cue start times by this delay. */
-    override fun setSubtitleDelay(delayMs: Long) { subtitleDelayMs = delayMs; sync() }
-    override fun setSubtitleStyle(scale: Float, background: Boolean) { subtitleScale = scale; subtitleBackground = background; sync() }
+    /**
+     * Applied live by [DelayedTextRenderer], so it holds across seeks. Renderers drop cues they've already passed, so a
+     * same-position seek (debounced) makes them re-read at the new offset.
+     */
+    override fun setSubtitleDelay(delayMs: Long) {
+        subtitleDelayMs = delayMs
+        sync()
+        delayJob?.cancel()
+        delayJob = scope.launch {
+            delay(350)
+            if (queueItems.isNotEmpty()) player.seekTo(player.currentPosition)
+        }
+    }
+
+    /** Shifts the subtitle renderer's clock by [subtitleDelayMs], so cues move whatever way they were parsed. */
+    private inner class DelayedRenderers(context: Context) : DefaultRenderersFactory(context) {
+        override fun buildTextRenderers(
+            context: Context, output: TextOutput, outputLooper: Looper, extensionRendererMode: Int, out: ArrayList<Renderer>,
+        ) {
+            val start = out.size
+            super.buildTextRenderers(context, output, outputLooper, extensionRendererMode, out)
+            for (i in start until out.size) if (out[i] is TextRenderer) out[i] = DelayedTextRenderer(out[i])
+        }
+    }
+
+    private inner class DelayedTextRenderer(renderer: Renderer) : ForwardingRenderer(renderer) {
+        override fun render(positionUs: Long, elapsedRealtimeUs: Long) = super.render(positionUs - subtitleDelayMs * 1000, elapsedRealtimeUs)
+    }
 
     override fun addSubtitle(uri: String) {
         val cur = current ?: return
@@ -281,20 +428,24 @@ class Media3PlayerEngine(context: Context) : PlayerEngine {
         val wasPlaying = player.playWhenReady
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
-        player.setMediaItem(build(cur), pos)
+        player.setMediaItems(queueItems.map(::build), player.currentMediaItemIndex, pos)
         player.prepare()
         player.playWhenReady = wasPlaying
     }
 
     override fun stop() {
-        if (playerLazy.isInitialized()) { player.stop(); player.clearMediaItems() }
-        current = null; extraSubs.clear(); error = null
+        sleepJob?.cancel(); sleepJob = null; sleepEndsAt = 0L; sleepAtEnd = false
+        if (playerLazy.isInitialized()) { player.pauseAtEndOfMediaItems = false; player.stop(); player.clearMediaItems() }
+        current = null; queueItems = emptyList(); extraSubs.clear(); error = null
         _state.value = PlayerState(volume = volume)
     }
 
     override fun release() {
         if (released) return
         released = true
+        if (instance === this) instance = null
+        controllerFuture?.let { MediaController.releaseFuture(it) }
+        controllerFuture = null
         ticker?.cancel()
         scope.cancel()
         releaseEnhancer()

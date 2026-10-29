@@ -35,11 +35,16 @@ import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Public
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.SelectAll
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -104,12 +109,14 @@ fun LibraryRoot(
     settings: AppSettings,
     onSettingsChange: (AppSettings) -> Unit,
     onPlay: (item: MediaItem, queue: List<MediaItem>) -> Unit,
+    onOpenAudioPlayer: () -> Unit = {},
 ) {
     val deps = LocalAppDeps.current
     val repo = deps.repository
     val c = OmTheme.colors
     val desktop = deps.platform.formFactor == FormFactor.Desktop
     val state by repo.state.collectAsState()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     LaunchedEffect(Unit) { repo.refresh() }
 
     var dest by remember { mutableStateOf<Dest>(if (desktop) Dest.Home else Dest.Videos) }
@@ -124,9 +131,52 @@ fun LibraryRoot(
     val allItems = remember(folders) { folders.flatMap { it.items } }
     val searching = query.isNotBlank()
 
-    val actions = remember(onPlay) { ItemActions(onPlay, { info = it }, { notice = it }) }
+    var selectedIds by remember { mutableStateOf(emptySet<String>()) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    var playlistTarget by remember { mutableStateOf<List<MediaItem>?>(null) }
+    val selecting = selectedIds.isNotEmpty()
+    val scrollStore = remember { ScrollStore() }
+    val actions = remember(onPlay, selectedIds, desktop) {
+        ItemActions(
+            onPlay, { info = it }, { notice = it },
+            selected = selectedIds, selectable = !desktop,
+            toggle = { m -> selectedIds = if (m.id in selectedIds) selectedIds - m.id else selectedIds + m.id },
+            addToPlaylist = { playlistTarget = it },
+        )
+    }
+    val selectedItems = remember(selectedIds, allItems) { allItems.filter { it.id in selectedIds } }
+
+    /** Everything the current screen lists as items, for "select all". */
+    fun visibleItems(): List<MediaItem> = when {
+        searching -> allItems.filter { it.title.contains(query.trim(), ignoreCase = true) }
+        dest is Dest.Music -> allItems.filter { it.isAudio }
+        dest is Dest.Folder -> folders.firstOrNull { it.id == (dest as Dest.Folder).id }?.videos().orEmpty()
+        else -> allItems.filter { !it.isAudio }
+    }
+
+    fun shareSelected() {
+        val ok = deps.platform.shareMedia(
+            selectedItems.map { it.uri }, audioOnly = selectedItems.all { it.isAudio }, videoOnly = selectedItems.none { it.isAudio },
+        )
+        if (!ok) notice = "Sharing isn't available here"
+    }
+
+    fun deleteSelected() {
+        val doomed = selectedItems
+        confirmDelete = false
+        deps.platform.deleteMedia(doomed.map { it.uri }) { n ->
+            if (n > 0) {
+                val playing = deps.engine.state.value.item?.id
+                if (playing != null && doomed.any { it.id == playing }) deps.engine.stop()
+                selectedIds = emptySet()
+                notice = if (n == 1) "Deleted 1 file" else "Deleted $n files"
+                scope.launch { repo.refresh() }
+            } else notice = "Nothing was deleted"
+        }
+    }
 
     fun goBack(): Boolean = when {
+        selecting -> { selectedIds = emptySet(); true }
         searching -> { query = ""; true }
         searchOpen -> { searchOpen = false; true }
         dest is Dest.Folder -> { dest = (dest as Dest.Folder).from; true }
@@ -134,11 +184,12 @@ fun LibraryRoot(
     }
 
     // System Back (Android): clear search, close search, leave folder. At the top level the system handles it.
-    PlatformBackHandler(enabled = !desktop && (searching || searchOpen || dest is Dest.Folder)) { goBack() }
+    PlatformBackHandler(enabled = !desktop && (selecting || searching || searchOpen || dest is Dest.Folder)) { goBack() }
 
     val focus = remember { FocusRequester() }
     LaunchedEffect(desktop) { if (desktop) runCatching { focus.requestFocus() } }
 
+    CompositionLocalProvider(LocalScrollStore provides scrollStore) {
     Box(
         Modifier.fillMaxSize().background(c.bg)
             .then(if (desktop) Modifier.focusRequester(focus).focusable().onPreviewKeyEvent { e ->
@@ -156,14 +207,16 @@ fun LibraryRoot(
             },
             label = "dest",
           ) { shownDest ->
+            CompositionLocalProvider(LocalScrollKey provides scrollKey(shownDest, query)) {
             Body(
                 dest = shownDest, state = state, folders = folders, allItems = allItems, query = query, prefs = prefs,
                 actions = actions, settings = settings, onSettingsChange = onSettingsChange, recentUrls = recentUrls,
                 onRecentUrls = { recentUrls = it }, onPlay = onPlay,
-                onOpenFolder = { dest = Dest.Folder(it.id, dest) },
+                onOpenFolder = { selectedIds = emptySet(); dest = Dest.Folder(it.id, dest) },
                 onRefresh = { },
                 repoAccess = { repo.requestAccess() },
             )
+            }
           }
         }
         val title = titleFor(dest, folders)
@@ -186,14 +239,25 @@ fun LibraryRoot(
             }
         } else {
             Column(Modifier.fillMaxSize()) {
-                PhoneTopBar(
+                if (selecting) SelectionBar(
+                    count = selectedIds.size,
+                    onClose = { selectedIds = emptySet() },
+                    onSelectAll = { selectedIds = visibleItems().map { it.id }.toSet() },
+                    onShare = ::shareSelected,
+                    onAddToPlaylist = {
+                        val audioOnly = selectedItems.filter { it.isAudio }
+                        if (audioOnly.isEmpty()) notice = "Playlists hold music. Select audio files." else playlistTarget = audioOnly
+                    },
+                    onDelete = { confirmDelete = true },
+                ) else PhoneTopBar(
                     title = title, canBack = canBack, searchOpen = searchOpen, query = query,
                     onQuery = { query = it }, onOpenSearch = { searchOpen = true },
                     onCloseSearch = { searchOpen = false; query = "" }, onBack = { goBack() },
                     showControls = dest.hasListControls(), prefs = prefs, onPrefs = { prefs = it },
                 )
                 Box(Modifier.weight(1f).fillMaxWidth()) { body() }
-                BottomNav(dest) { dest = it; query = ""; searchOpen = false }
+                com.omplayer.ui.player.MiniPlayer(onOpenAudioPlayer)
+                BottomNav(dest) { dest = it; query = ""; searchOpen = false; selectedIds = emptySet() }
             }
         }
 
@@ -206,10 +270,21 @@ fun LibraryRoot(
                 }
             }
         }
+        playlistTarget?.let { target ->
+            PlaylistPickerDialog(target, onDone = { msg -> playlistTarget = null; selectedIds = emptySet(); notice = msg }, onDismiss = { playlistTarget = null })
+        }
+        if (confirmDelete) ConfirmDeleteDialog(selectedIds.size, ::deleteSelected, { confirmDelete = false })
         info?.let { item ->
             InfoDialog(item, folders.firstOrNull { it.id == item.folderId }?.path, onDismiss = { info = null })
         }
     }
+    }
+}
+
+private fun scrollKey(dest: Dest, query: String): String = when {
+    query.isNotBlank() -> "search"
+    dest is Dest.Folder -> "folder:${dest.id}"
+    else -> dest::class.simpleName.orEmpty()
 }
 
 private fun Dest.hasListControls() = this is Dest.Home || this is Dest.Videos || this is Dest.Music || this is Dest.Folders || this is Dest.Folder
@@ -252,7 +327,7 @@ private fun Body(
                 Dest.Videos -> if (LocalAppDeps.current.platform.formFactor == FormFactor.Phone)
                     HomeContent(folders, prefs, showContinue = true, actions, onOpenFolder, refresh)
                 else ItemList(allItems.filter { !it.isAudio }, prefs, actions, Modifier.fillMaxSize())
-                Dest.Music -> MusicContent(allItems, prefs, actions)
+                Dest.Music -> MusicHome(allItems, prefs, actions)
                 is Dest.Folder -> folders.firstOrNull { it.id == dest.id }?.let { FolderContent(it, prefs, actions) }
                 else -> {}
             }
@@ -261,6 +336,23 @@ private fun Body(
 }
 
 // ---------- phone chrome ----------
+
+/** Replaces the top bar while items are selected (audio and video alike). */
+@Composable
+private fun SelectionBar(count: Int, onClose: () -> Unit, onSelectAll: () -> Unit, onShare: () -> Unit, onAddToPlaylist: () -> Unit, onDelete: () -> Unit) {
+    val c = OmTheme.colors
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).background(c.surface1).padding(horizontal = OmSpace.s2),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OmIconButton(Icons.Rounded.Close, "Cancel selection", onClose)
+        OmText("$count selected", size = 18.sp, weight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(start = OmSpace.s2))
+        OmIconButton(Icons.Rounded.SelectAll, "Select all", onSelectAll)
+        OmIconButton(Icons.Rounded.PlaylistAdd, "Add selected to playlist", onAddToPlaylist)
+        OmIconButton(Icons.Rounded.Share, "Share selected", onShare)
+        OmIconButton(Icons.Rounded.Delete, "Delete selected", onDelete, tint = c.danger)
+    }
+}
 
 @Composable
 private fun PhoneTopBar(

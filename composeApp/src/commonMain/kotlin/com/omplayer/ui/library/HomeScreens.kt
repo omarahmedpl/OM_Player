@@ -158,6 +158,7 @@ internal fun HomeContent(
     } else emptyList()
     val pad = contentPad()
     LazyVerticalGrid(
+        state = LocalScrollStore.current.grid(LocalScrollKey.current),
         columns = gridCells(prefs.grid),
         contentPadding = PaddingValues(start = pad, end = pad, top = OmSpace.s2, bottom = OmSpace.s6),
         horizontalArrangement = Arrangement.spacedBy(OmSpace.s3),

@@ -11,6 +11,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -128,6 +129,7 @@ fun Modifier.pressable(
     onClickLabel: String? = null,
     hoverShape: Shape = RoundedCornerShape(OmRadius.md),
     hoverColor: Color = OmTheme.colors.text,
+    onLongClick: (() -> Unit)? = null,
 ): Modifier {
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
@@ -145,7 +147,10 @@ fun Modifier.pressable(
         .then(if (enabled) Modifier.pointerHoverIcon(PointerIcon.Hand) else Modifier)
         .hoverable(src, enabled)
         .background(hoverColor.copy(alpha = tint), hoverShape)
-        .clickable(interactionSource = src, indication = null, enabled = enabled, onClickLabel = onClickLabel, role = role, onClick = onClick)
+        .combinedClickable(
+            interactionSource = src, indication = null, enabled = enabled, onClickLabel = onClickLabel, role = role,
+            onLongClick = onLongClick, onClick = onClick,
+        )
 }
 
 /** Hand cursor for clickables that keep their own indication (rows with the default hover/ripple). */

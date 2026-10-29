@@ -162,7 +162,8 @@ Then: Codex review, Sonnet fixes, Haiku checks, a build of both targets, and a d
 - [ ] Verify hover/cursor on desktop by hand (can't be screenshotted here; no xdotool)
 - [ ] Codex review of Milestone 1 code → fix findings
 - [ ] Desktop: subtitle background box (libVLC freetype is global), `bufferedMs` always 0, duration/resolution unknown at scan (parse with vlcj)
-- [ ] Android: subtitle delay doesn't shift cues yet (stored only); Original scale = Fit; no background-play service; FFmpeg audio extension (AC3/EAC3/DTS) not added
+- [x] Android subtitle delay now shifts cues (see 2026-10-29 notes); background-play service added for audio
+- [ ] Android: Original scale = Fit; FFmpeg audio extension (AC3/EAC3/DTS) not added
 - [ ] Persistence of settings (theme, gestures…) on both platforms; progress already persists (SharedPreferences / ~/.config/om-player/progress.json)
 - [ ] Physical-device test (the connected phone was not used). Remaining Android checks: embedded song artwork, launcher interaction, and repeated player open/close. A real video thumbnail and player panels, whole-screen rotation, fullscreen, replay, speed, seeking, and native splash were checked on API 34.
 
@@ -436,3 +437,34 @@ Codex reads `AGENTS.md` automatically.
 - Fixed Space activating a focused Restart/direction button instead of pausing. Fixed unfinished swipes surviving restart or pause/resume, and secondary pointers replacing/cancelling the active swipe.
 - Added controller regression tests using Node's existing test runner, a minimal DOM and a deterministic clock. Expanded engine tests to cover every reverse direction and all possible food cells.
 - Verification: `node prototype/snake/engine.test.mjs` passed 14/14; `node prototype/snake/game.test.mjs` passed 9/9; `node --check prototype/snake/game.mjs` and `git diff --check` passed. Two controller regressions failed before the fix. Browser checks confirmed Space pauses with Restart or a direction button focused, without runtime errors. Physical multi-touch remains unverified; pointer ownership and cancellation are covered by controller tests.
+
+
+## Session 2026-10-29 (Claude): audio player, playlists, multi-select, subtitle delay
+
+Research and critique behind the audio work: [AUDIO_RESEARCH.md](AUDIO_RESEARCH.md). Nothing is committed. Android `versionCode` is 4 (release APK installed on the owner's phone, SM-S721B, signed with the release key).
+
+**Contracts changed (keep in sync):**
+- `PlayerEngine` / `PlayerState`: `openQueue`, `skipNext/Previous/To`, `setSleepTimer`, `setRepeatMode`, `setShuffle`; state adds `queue`, `queueIndex`, `hasNext`, `repeat` (`RepeatMode`), `shuffle`, `sleepEndsAtMs`, `sleepAtTrackEnd`. Defaults are no-ops, so only the Android engine implements them; desktop still plays one item at a time.
+- `PlatformActions`: `shareMedia`, `deleteMedia`, `sharePlaylists` (`ShareFormat.Json|Image`), `pickTextFile`, `onAudioPlaybackStarted`.
+- `AppDeps` gains `userData: UserLibrary` (favourites + playlists, persisted through `TextStorage`: SharedPreferences on Android, `library.txt` on desktop).
+- `MediaItem.artist` (Android reads it from MediaStore). `LibraryRoot(..., onOpenAudioPlayer)`.
+
+**Audio (phones only; desktop keeps the video player for audio):**
+- `ui/player/AudioPlayer.kt`: full Now Playing (square artwork, seek bar with elapsed/remaining, prev, -10 s, play, +30 s, next, shuffle, repeat, speed, sleep timer, add to playlist, favourite, queue) and `MiniPlayer` above the bottom nav. Dragging the cover or top bar down minimizes it (same as the button). Android Back closes a panel first, then minimizes.
+- One engine per process: `Media3PlayerEngine.get(context)`. `PlaybackService` (MediaSessionService) publishes its single session for the notification, lock screen and Bluetooth buttons; it is started by binding a `MediaController` when audio opens. The Activity no longer releases the engine while audio plays. Manifest adds FOREGROUND_SERVICE, FOREGROUND_SERVICE_MEDIA_PLAYBACK and POST_NOTIFICATIONS (asked once when audio starts).
+- Audio focus, becoming-noisy pause, PiP only for video, saved speed/repeat/shuffle, resume points via `AudioProgressSaver` in `App.kt`.
+- Notification shows Next only when a next track exists; repeat All makes it always available.
+- Queue list renders every row (no lazy list), fine for hundreds of tracks, not thousands.
+
+**Library:**
+- Multi-select on phones (long-press), for audio and video rows: Share, Delete (app confirmation, then the system consent on API 30+), Add to playlist, Select all. API 26-29 can only delete files the app may modify.
+- Music tabs: Songs, Favourites, Playlists. Playlists: create, select several (long-press), delete with confirmation, share as PNG or JSON (names + song titles), import from the JSON (`PlaylistExport.parse`, titles matched to the library, unmatched songs skipped), play/shuffle, remove tracks.
+- Scroll position per screen is kept (`ScrollStore`), so coming back from a folder lands where you left.
+- Bottom sheets add bottom safe-area and keyboard insets.
+
+**Subtitle delay (Android):** `DelayedTextRenderer` shifts the text renderer's clock by the offset, so it works for any subtitle format and changes live; a same-position seek (debounced 350 ms) makes it re-read. Verified on the emulator with an MP4 with an embedded subtitle at +4000 ms.
+
+**Splash:** cold start holds the splash until 1.5 s after process start, then fades over 450 ms (ease-out). Skipped when system animations are off.
+
+**Verified (emulator-5554, API 34):** queue, prev/next/seek/skip, background play with the Activity backgrounded and media keys, foreground notification with Previous/Pause/Next, mini-player, favourites/playlist sheet with keyboard, playlist select/share chooser/PNG output/delete confirmation/import, media delete with system consent, scroll restoration, drag-to-minimize, subtitle delay, splash timing. `desktopTest`: 4 tests pass (`PlaylistExportTest`).
+**Not verified:** playback surviving a destroyed Activity (test was not conclusive), JSON share chooser, Android below API 34, embedded artwork on real files, desktop UI for these features (desktop compiles; audio there still uses the video player).

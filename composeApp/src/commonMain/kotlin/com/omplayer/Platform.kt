@@ -15,6 +15,11 @@ import kotlinx.coroutines.flow.asStateFlow
 
 enum class FormFactor { Phone, Desktop }
 
+enum class ShareFormat { Json, Image }
+
+/** A playlist as shared with other apps: its name and the track titles in order. */
+class SharedPlaylist(val name: String, val tracks: List<String>)
+
 /** Requested screen orientation while the player is open. Auto follows the device/system setting. */
 enum class ScreenOrientation { Auto, Landscape, Portrait }
 
@@ -32,6 +37,16 @@ interface PlatformActions {
     fun keepScreenOn(enabled: Boolean) {}
     /** Open a file picker for a single media file; result arrives via the callback (null = cancelled). */
     fun pickMediaFile(onResult: (uri: String?) -> Unit) { onResult(null) }
+    /** Share media files with other apps. Returns false when the platform can't. */
+    fun shareMedia(uris: List<String>, audioOnly: Boolean, videoOnly: Boolean): Boolean = false
+    /** Delete media files after the system's own confirmation. [onResult] gets the number actually deleted. */
+    fun deleteMedia(uris: List<String>, onResult: (deleted: Int) -> Unit) { onResult(0) }
+    /** Let the user pick a small text file (an exported playlist). [onResult] gets its text, or null if cancelled or unreadable. */
+    fun pickTextFile(onResult: (text: String?) -> Unit) { onResult(null) }
+    /** Share playlists (names and song titles) as a JSON file or a PNG image. Returns false when the platform can't. */
+    fun sharePlaylists(lists: List<SharedPlaylist>, format: ShareFormat): Boolean = false
+    /** Called when audio playback starts so the platform can start its background service / ask for notifications. */
+    fun onAudioPlaybackStarted() {}
     /** True while the app runs in a picture-in-picture window; the player hides its controls. */
     val inPictureInPicture: StateFlow<Boolean> get() = NotInPip
     /** Desktop: the window's real fullscreen state (it can also change outside the player, e.g. Esc at window level). */
@@ -48,6 +63,8 @@ class AppDeps(
     val progress: ProgressStore,
     val engine: PlayerEngine,
     val platform: PlatformActions,
+    /** Favourites and playlists. */
+    val userData: com.omplayer.data.UserLibrary = com.omplayer.data.UserLibrary(),
 )
 
 val LocalAppDeps = staticCompositionLocalOf<AppDeps> { error("AppDeps not provided") }

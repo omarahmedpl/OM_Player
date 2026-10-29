@@ -15,6 +15,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -147,7 +152,13 @@ private fun BottomSheet(title: String, onDismiss: () -> Unit, content: @Composab
                     PIconButton(Icons.Rounded.Close, "Close sheet", { scope.launch { close() } }, tint = c.text2)
                 }
             }
-            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(bottom = OmSpace.s4), content = content)
+            // Bottom safe area: navigation bar, and the keyboard while a field is focused (the sheet grows above it).
+            Column(
+                Modifier.weight(1f, fill = false)
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
+                    .verticalScroll(rememberScrollState()).padding(bottom = OmSpace.s4),
+                content = content,
+            )
         }
     }
 }

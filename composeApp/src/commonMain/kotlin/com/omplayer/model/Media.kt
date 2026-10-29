@@ -12,6 +12,8 @@ data class MediaItem(
     val height: Int = 0,
     val dateAddedMs: Long = 0,
     val isAudio: Boolean = false,
+    /** Audio only: artist tag when the platform provides one. */
+    val artist: String = "",
 ) {
     /** "4K", "1080p", "720p"… or empty when unknown. */
     val resolutionLabel: String

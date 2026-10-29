@@ -108,6 +108,7 @@ class MediaStoreRepository(context: Context) : MediaRepository {
             MediaStore.MediaColumns.DATE_ADDED, pathCol,
         )
         if (!audio) { cols += MediaStore.MediaColumns.WIDTH; cols += MediaStore.MediaColumns.HEIGHT }
+        else cols += MediaStore.Audio.AudioColumns.ARTIST
         val out = ArrayList<Row>()
         ctx.contentResolver.query(base, cols.toTypedArray(), null, null, "${MediaStore.MediaColumns.DATE_ADDED} DESC")?.use { c ->
             val iId = c.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
@@ -120,6 +121,7 @@ class MediaStoreRepository(context: Context) : MediaRepository {
             val iPath = c.getColumnIndexOrThrow(pathCol)
             val iW = if (audio) -1 else c.getColumnIndexOrThrow(MediaStore.MediaColumns.WIDTH)
             val iH = if (audio) -1 else c.getColumnIndexOrThrow(MediaStore.MediaColumns.HEIGHT)
+            val iArtist = if (audio) c.getColumnIndexOrThrow(MediaStore.Audio.AudioColumns.ARTIST) else -1
             while (c.moveToNext()) {
                 val id = c.getLong(iId)
                 val uri = android.content.ContentUris.withAppendedId(base, id).toString()
@@ -138,6 +140,7 @@ class MediaStoreRepository(context: Context) : MediaRepository {
                     height = if (iH >= 0) c.getInt(iH) else 0,
                     dateAddedMs = c.getLong(iDate) * 1000,
                     isAudio = audio,
+                    artist = if (iArtist >= 0) c.getString(iArtist)?.takeIf { it != "<unknown>" }.orEmpty() else "",
                 )
                 out += Row(bucket, c.getString(iBn) ?: "Unknown", path, item)
             }

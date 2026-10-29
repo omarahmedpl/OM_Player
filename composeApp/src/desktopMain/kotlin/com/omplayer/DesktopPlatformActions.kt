@@ -80,6 +80,13 @@ class DesktopPlatformActions(private val windowState: WindowState) : PlatformAct
         return true
     }
 
+    override fun pickTextFile(onResult: (String?) -> Unit) {
+        val dialog = FileDialog(null as Frame?, "Import playlist", FileDialog.LOAD)
+        dialog.isVisible = true
+        val f = dialog.file
+        onResult(if (f == null) null else runCatching { java.io.File(dialog.directory, f).takeIf { it.length() <= 2_000_000 }?.readText() }.getOrNull())
+    }
+
     override fun pickMediaFile(onResult: (uri: String?) -> Unit) {
         val dialog = FileDialog(null as Frame?, "Open media", FileDialog.LOAD)
         dialog.isVisible = true

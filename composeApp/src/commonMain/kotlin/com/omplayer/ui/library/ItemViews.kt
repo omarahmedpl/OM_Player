@@ -1,7 +1,11 @@
 package com.omplayer.ui.library
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.PlaylistAdd
+import androidx.compose.material.icons.rounded.RemoveCircleOutline
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -71,7 +75,55 @@ internal class ItemActions(
     val play: (MediaItem, List<MediaItem>) -> Unit,
     val info: (MediaItem) -> Unit,
     val notice: (String) -> Unit,
-)
+    /** Ids of the selected items (phones). Non-empty means selection mode: taps toggle instead of playing. */
+    val selected: Set<String> = emptySet(),
+    val selectable: Boolean = false,
+    val toggle: (MediaItem) -> Unit = {},
+    /** Set inside a playlist: adds "Remove from playlist" to the item menu. */
+    val onRemove: ((MediaItem) -> Unit)? = null,
+    val addToPlaylist: ((List<MediaItem>) -> Unit)? = null,
+) {
+    val selecting get() = selected.isNotEmpty()
+}
+
+@Composable
+internal fun SelectBadge(on: Boolean, modifier: Modifier = Modifier) {
+    val c = OmTheme.colors
+    Box(
+        modifier.size(22.dp).clip(androidx.compose.foundation.shape.CircleShape)
+            .background(if (on) c.primary else c.scrim)
+            .border(1.5.dp, if (on) c.primary else c.onVideo, androidx.compose.foundation.shape.CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (on) Icon(Icons.Rounded.Check, null, tint = c.onPrimary, modifier = Modifier.size(15.dp))
+    }
+}
+
+@Composable
+internal fun ConfirmDialog(title: String, body: String, confirmLabel: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    val c = OmTheme.colors
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = c.surface2,
+        title = { OmText(title, weight = FontWeight.SemiBold, size = 17.sp, maxLines = 2) },
+        text = { OmText(body, color = c.text2, maxLines = 3) },
+        confirmButton = { OmButton(confirmLabel, onConfirm) },
+        dismissButton = { OmButton("Cancel", onDismiss, primary = false) },
+    )
+}
+
+@Composable
+internal fun ConfirmDeleteDialog(count: Int, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    val c = OmTheme.colors
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = c.surface2,
+        title = { OmText(if (count == 1) "Delete 1 file?" else "Delete $count files?", weight = FontWeight.SemiBold, size = 17.sp) },
+        text = { OmText("They will be removed from your device. This can't be undone.", color = c.text2, maxLines = 3) },
+        confirmButton = { OmButton("Delete", onConfirm) },
+        dismissButton = { OmButton("Cancel", onDismiss, primary = false) },
+    )
+}
 
 internal fun sortItems(items: List<MediaItem>, p: ListPrefs): List<MediaItem> {
     val sorted = when (p.sort) {
@@ -138,6 +190,7 @@ internal fun ItemList(
     val sorted = remember(items, prefs.sort, prefs.asc) { sortItems(items, prefs) }
     val pad = contentPad()
     LazyVerticalGrid(
+        state = LocalScrollStore.current.grid(LocalScrollKey.current),
         columns = gridCells(prefs.grid),
         modifier = modifier,
         contentPadding = PaddingValues(start = pad, end = pad, top = OmSpace.s2, bottom = OmSpace.s6),
@@ -162,14 +215,20 @@ internal fun MediaCell(item: MediaItem, queue: List<MediaItem>, grid: Boolean, a
         item.sizeBytes.takeIf { it > 0 }?.let(::formatSize),
     ).joinToString(" · ")
 
+    val isSel = item.id in actions.selected
+    val onTap = { if (actions.selecting) actions.toggle(item) else actions.play(item, queue) }
+    val onHold: (() -> Unit)? = if (actions.selectable) ({ actions.toggle(item) }) else null
+
     @Composable
     fun thumb(m: Modifier) = ThumbnailPlaceholder(item.id, m.clip(RoundedCornerShape(OmRadius.sm)), item.isAudio, uri = item.uri) {
         if (item.durationMs > 0) MetaChip(formatDuration(item.durationMs), Modifier.align(Alignment.BottomEnd).padding(4.dp))
         if (frac > 0f) ProgressBar(frac, Modifier.align(Alignment.BottomStart))
+        if (isSel) Box(Modifier.matchParentSize().background(c.primary.copy(alpha = 0.28f)))
+        if (actions.selecting) SelectBadge(isSel, Modifier.align(Alignment.TopStart).padding(6.dp))
     }
 
     if (grid) {
-        Column(modifier.fillMaxWidth().pressable({ actions.play(item, queue) }, role = androidx.compose.ui.semantics.Role.Button)) {
+        Column(modifier.fillMaxWidth().pressable(onTap, role = androidx.compose.ui.semantics.Role.Button, onLongClick = onHold)) {
             thumb(Modifier.fillMaxWidth().aspectRatio(16f / 9f))
             Spacer(Modifier.height(OmSpace.s2))
             Row(verticalAlignment = Alignment.Top) {
@@ -177,12 +236,14 @@ internal fun MediaCell(item: MediaItem, queue: List<MediaItem>, grid: Boolean, a
                     OmText(item.title, weight = FontWeight.Medium, maxLines = 2)
                     if (meta.isNotEmpty()) OmText(meta, color = c.text3, size = 12.sp, tnum = true)
                 }
-                ItemMenu(item, queue, actions)
+                if (!actions.selecting) ItemMenu(item, queue, actions)
             }
         }
     } else {
         Row(
-            modifier.fillMaxWidth().heightIn(min = 72.dp).pressable({ actions.play(item, queue) }).padding(vertical = OmSpace.s2),
+            modifier.fillMaxWidth().heightIn(min = 72.dp).pressable(onTap, onLongClick = onHold)
+                .then(if (isSel) Modifier.background(c.primarySoft, RoundedCornerShape(OmRadius.md)) else Modifier)
+                .padding(vertical = OmSpace.s2),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             thumb(Modifier.width(120.dp).aspectRatio(16f / 9f))
@@ -191,7 +252,7 @@ internal fun MediaCell(item: MediaItem, queue: List<MediaItem>, grid: Boolean, a
                 OmText(item.title, weight = FontWeight.Medium, maxLines = 2)
                 if (meta.isNotEmpty()) OmText(meta, color = c.text3, size = 12.sp, tnum = true)
             }
-            ItemMenu(item, queue, actions)
+            if (!actions.selecting) ItemMenu(item, queue, actions)
         }
     }
 }
@@ -213,6 +274,16 @@ internal fun ItemMenu(item: MediaItem, queue: List<MediaItem>, actions: ItemActi
                 text = { OmText("Play as audio") },
                 leadingIcon = { Icon(Icons.Rounded.Headphones, null, tint = c.text2) },
                 onClick = { open = false; actions.notice("Audio-only playback is coming soon") },
+            )
+            if (item.isAudio && actions.addToPlaylist != null) DropdownMenuItem(
+                text = { OmText("Add to playlist") },
+                leadingIcon = { Icon(Icons.Rounded.PlaylistAdd, null, tint = c.text2) },
+                onClick = { open = false; actions.addToPlaylist.invoke(listOf(item)) },
+            )
+            if (actions.onRemove != null) DropdownMenuItem(
+                text = { OmText("Remove from playlist") },
+                leadingIcon = { Icon(Icons.Rounded.RemoveCircleOutline, null, tint = c.text2) },
+                onClick = { open = false; actions.onRemove.invoke(item) },
             )
             DropdownMenuItem(
                 text = { OmText("Info") },

@@ -14,6 +14,8 @@ enum class ScaleMode { Fit, Fill, Crop, Original }
 
 enum class Decoder { HW, SW }
 
+enum class RepeatMode { Off, All, One }
+
 data class PlayerState(
     val item: MediaItem? = null,
     val isPlaying: Boolean = false,
@@ -35,6 +37,16 @@ data class PlayerState(
     val videoWidth: Int = 0,
     val videoHeight: Int = 0,
     val error: String? = null,
+    /** Playlist loaded with [PlayerEngine.openQueue]; [item] is `queue[queueIndex]`. Empty for single-item playback. */
+    val queue: List<MediaItem> = emptyList(),
+    val queueIndex: Int = -1,
+    /** Sleep timer: wall-clock end (0 = none) or pause at the end of the current track. */
+    val sleepEndsAtMs: Long = 0,
+    val sleepAtTrackEnd: Boolean = false,
+    val repeat: RepeatMode = RepeatMode.Off,
+    val shuffle: Boolean = false,
+    /** True when [PlayerEngine.skipNext] has somewhere to go (respects repeat and shuffle). */
+    val hasNext: Boolean = false,
 )
 
 /**
@@ -62,6 +74,17 @@ interface PlayerEngine {
     fun setSubtitleStyle(scale: Float, background: Boolean) {}
     /** Load an external subtitle file (path or URI) for the current item. */
     fun addSubtitle(uri: String) {}
+    /** Play [items] starting at [startIndex]. The engine advances through them (also in the background). */
+    fun openQueue(items: List<MediaItem>, startIndex: Int, startMs: Long = 0) {
+        items.getOrNull(startIndex)?.let { open(it, startMs) }
+    }
+    fun setRepeatMode(mode: RepeatMode) {}
+    fun setShuffle(enabled: Boolean) {}
+    fun skipNext() {}
+    fun skipPrevious() {}
+    fun skipTo(index: Int) {}
+    /** Pause after [minutes], or at the end of the current track. Null/0 cancels. Engines without support ignore it. */
+    fun setSleepTimer(minutes: Int?, atTrackEnd: Boolean = false) {}
     fun stop()
     fun release()
 }
